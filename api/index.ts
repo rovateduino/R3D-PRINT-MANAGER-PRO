@@ -125,9 +125,10 @@ const asaasUrl = () => process.env.ASAAS_ENV === 'production' ? 'https://api.asa
 
 function generateLicenseKey(payload: any) {
   const secret = process.env.KEYGEN_SECRET || 'R3D_SECRET_KEY_2026_XPTO_MANAGER';
-  const key = require('crypto').createHash('sha256').update(secret).digest();
+  const crypto = require('crypto');
+  const key = crypto.createHash('sha256').update(secret).digest();
   const iv = randomBytes(16);
-  const cipher = require('crypto').createCipheriv('aes-256-cbc', key, iv);
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
   let encrypted = cipher.update(JSON.stringify(payload), 'utf8', 'hex');
   encrypted += cipher.final('hex');
   return `${iv.toString('hex')}:${encrypted}`;
@@ -221,7 +222,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Admin: Atualizar cupom
     if (url.match(/^\/api\/admin\/cupom\/[^\/]+$/) && method === 'PUT') {
       if (!isAdmin) return res.status(401).json({ message: 'Não autorizado' });
-      const id = url.split('/').pop();
+      const id = url.split('/').pop() as string;
+      if (!id) return res.status(400).json({ error: 'ID ausente' });
       const existing = await firestoreRequest('GET', `cupons/${id}`).catch(() => null);
       if (!existing) return res.status(404).json({ message: 'Cupom não encontrado' });
       await firestoreRequest('PATCH', `cupons/${id}`, { ...existing, ...req.body });
@@ -231,7 +233,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Admin: Excluir cupom
     if (url.match(/^\/api\/admin\/cupom\/[^\/]+$/) && method === 'DELETE') {
       if (!isAdmin) return res.status(401).json({ message: 'Não autorizado' });
-      const id = url.split('/').pop();
+      const id = url.split('/').pop() as string;
+      if (!id) return res.status(400).json({ error: 'ID ausente' });
       await firestoreDelete('cupons', id);
       return res.json({ success: true });
     }
@@ -488,7 +491,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (url.includes('/api/admin/activation/reset/') && method === 'POST') {
       if (!isAdmin) return res.status(401).json({ message: 'Não autorizado' });
-      const code = String(url.split('/reset/')[1]?.split('?')[0]);
+      const code = (url.split('/reset/')[1]?.split('?')[0] || '') as string;
+      if (!code) return res.status(400).json({ message: 'Código inválido' });
       const activation = await firestoreRequest('GET', `activations/${code.toUpperCase()}`).catch(() => null);
       if (!activation) return res.status(404).json({ message: 'Ativação não encontrada' });
       await firestoreRequest('PATCH', `activations/${code.toUpperCase()}`, { status: 'AVAILABLE', usedAt: null, hwid: null });
@@ -502,14 +506,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (url.includes('/api/admin/license/delete/') && method === 'DELETE') {
       if (!isAdmin) return res.status(401).json({ message: 'Não autorizado' });
-      const hwid = String(url.split('/').pop());
+      const hwid = (url.split('/').pop() || '') as string;
+      if (!hwid) return res.status(400).json({ message: 'HWID inválido' });
       await firestoreDelete('licenses', hwid);
       return res.json({ success: true });
     }
     
     if (url.includes('/api/admin/activation/delete/') && method === 'DELETE') {
       if (!isAdmin) return res.status(401).json({ message: 'Não autorizado' });
-      const code = String(url.split('/').pop());
+      const code = (url.split('/').pop() || '') as string;
+      if (!code) return res.status(400).json({ message: 'Código inválido' });
       await firestoreDelete('activations', code.toUpperCase());
       return res.json({ success: true });
     }
