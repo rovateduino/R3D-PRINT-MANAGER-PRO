@@ -224,7 +224,7 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
         body: JSON.stringify({ name: formData.name, email: formData.email, cpfCnpj: formData.cpfCnpj, mobilePhone: formData.phone, postalCode: formData.postalCode, addressNumber: formData.addressNumber })
       });
       let customer: any;
-      try { customer = await custRes.json(); } catch { throw new Error('Erro no servidor.'); }
+      try { customer = await custRes.json(); } catch { throw new Error('Erro no servidor ao processar cliente.'); }
       if (!custRes.ok) throw new Error(customer.errors?.[0]?.description || customer.message || 'Erro ao criar cliente');
 
       const finalValue = getDiscountedPrice();
@@ -250,7 +250,7 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
 
       const payRes = await fetch('/api/asaas/payment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadBase) });
       let payment: any;
-      try { payment = await payRes.json(); } catch { throw new Error('Erro no servidor.'); }
+      try { payment = await payRes.json(); } catch { throw new Error('Erro no servidor ao processar pagamento.'); }
       if (!payRes.ok) throw new Error(payment.errors?.[0]?.description || payment.message || 'Erro no pagamento');
 
       if (paymentMethod === 'PIX') {
@@ -283,7 +283,10 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
       } else {
         setSuccess(true);
       }
-    } catch (err: any) { setError(err.message); } finally { setLoading(false); }
+    } catch (err: any) {
+      setError(err.message || 'Erro inesperado durante o checkout.');
+      console.error('[Checkout Error]', err);
+    } finally { setLoading(false); }
   };
 
   const ic = "w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:border-[#C67D3D] outline-none text-white placeholder-gray-600";
