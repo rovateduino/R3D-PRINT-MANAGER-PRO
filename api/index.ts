@@ -5,6 +5,12 @@ import { initializeApp, getApps, cert, ServiceAccount } from 'firebase-admin/app
 import { getFirestore } from 'firebase-admin/firestore';
 
 // ============================================================
+// CONFIGURAÇÃO DO DATABASE ID (IMPORTANTE!)
+// ============================================================
+// Seu Database ID do Firebase - pego do firebase-applet-config.json
+const FIREBASE_DATABASE_ID = 'ai-studio-ee7c5fd5-11f5-4e50-a979-3316fea33a21';
+
+// ============================================================
 // INICIALIZAÇÃO DO FIREBASE ADMIN SDK (CORRIGIDA)
 // ============================================================
 
@@ -24,18 +30,33 @@ try {
   
   if (!getApps().length) {
     console.log('Inicializando Firebase Admin SDK...');
+    console.log('Project ID:', serviceAccount.projectId);
+    console.log('Database ID:', FIREBASE_DATABASE_ID);
+    
     initializeApp({
       credential: cert(serviceAccount),
       projectId: serviceAccount.projectId,
     });
+    
     console.log('Firebase Admin SDK inicializado com sucesso');
   }
   
-  db = getFirestore();
-  console.log('Firestore conectado');
+  // IMPORTANTE: Usar o Database ID específico
+  db = getFirestore().settings({
+    databaseId: FIREBASE_DATABASE_ID
+  }) as any;
+  
+  // Teste de conexão
+  console.log('Firestore conectado com Database ID:', FIREBASE_DATABASE_ID);
+  
+  // Teste rápido para verificar se consegue ler
+  const testDoc = await db.collection('_health_check').doc('test').get();
+  console.log('Teste de leitura Firestore:', testDoc.exists ? 'sucesso' : 'coleção vazia');
   
 } catch (error: any) {
   console.error('Erro fatal ao inicializar Firebase:', error.message);
+  console.error('Stack:', error.stack);
+  
   // Em desenvolvimento, podemos criar um fallback, mas em produção isso falha
   if (process.env.NODE_ENV !== 'production') {
     console.warn('⚠️ Modo desenvolvimento: usando fallback');
@@ -107,22 +128,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const clientPass = req.headers['x-admin-password'];
     const isAdmin = clientPass === ADMIN_PASS;
 
-    // ── Health Check ──────────────────────────────────────────────────────────
+    // ── Health Check (CORRIGIDO) ──────────────────────────────────────────────
     if (url === '/api/health' || url === '/api/health/') {
       try {
-        // Testa conexão com Firestore
-        await db.collection('_health_check').doc('test').set({ timestamp: new Date().toISOString() });
+        // Testa conexão com Firestore usando o Database ID correto
+        const testRef = db.collection('_health_check').doc('test');
+        await testRef.set({ 
+          timestamp: new Date().toISOString(),
+          message: 'R3D Pro API is alive'
+        });
+        
+        // Tenta listar algumas coleções para verificar permissões
+        const collections = await db.listCollections();
+        const collectionNames: string[] = [];
+        for (const col of collections) {
+          collectionNames.push(col.id);
+        }
+        
         return res.json({ 
           status: 'ok', 
-          firebase: true, 
+          firebase: true,
+          databaseId: FIREBASE_DATABASE_ID,
+          projectId: process.env.FIREBASE_SERVICE_ACCOUNT ? 
+            JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}').projectId : 
+            'unknown',
+          collections: collectionNames.slice(0, 10), // primeiras 10 coleções
           asaasEnv: process.env.ASAAS_ENV || 'sandbox',
           timestamp: new Date().toISOString()
         });
       } catch (e: any) {
+        console.error('[Health] Erro detalhado:', e);
         return res.json({
           status: 'degraded',
           firebase: false,
           error: e.message,
+          code: e.code,
+          databaseId: FIREBASE_DATABASE_ID,
           timestamp: new Date().toISOString()
         });
       }
