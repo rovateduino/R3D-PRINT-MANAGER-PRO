@@ -726,17 +726,26 @@ const AdminPanel = () => {
       if (activeTab === 'cupons') {
         const res = await fetch('/api/admin/cupons', { headers });
         if (res.ok) { setCupons(await res.json()); setIsAuthenticated(true); }
-        else setError('Senha incorreta ou erro ao carregar cupons');
+        else {
+          const data = await res.json().catch(() => ({}));
+          setError(data.message || 'Senha incorreta ou erro ao carregar cupons');
+        }
       } else if (activeTab === 'activations') {
         const res = await fetch('/api/admin/activations', { headers });
         if (res.ok) { setActivations(await res.json()); setIsAuthenticated(true); }
-        else setError('Erro ao carregar ativações');
+        else {
+          const data = await res.json().catch(() => ({}));
+          setError(data.message || 'Erro ao carregar ativações');
+        }
       } else if (activeTab === 'licenses') {
         const res = await fetch('/api/admin/licenses', { headers });
         if (res.ok) { setLicenses(await res.json()); setIsAuthenticated(true); }
-        else setError('Erro ao carregar licenças');
+        else {
+          const data = await res.json().catch(() => ({}));
+          setError(data.message || 'Erro ao carregar licenças');
+        }
       }
-    } catch { setError('Erro de conexão'); } finally { setLoading(false); }
+    } catch { setError('Erro de conexão com o servidor'); } finally { setLoading(false); }
   };
 
   useEffect(() => {
