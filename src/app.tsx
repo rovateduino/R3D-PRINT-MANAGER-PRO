@@ -1752,7 +1752,7 @@ export default function App() {
         </div>
       </section>
 
-      <footer className="py-16 border-t border-white/5 bg-[#080808]">
+      <footer className="pt-16 pb-32 border-t border-white/5 bg-[#080808] relative z-50">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid md:grid-cols-4 gap-12 mb-12">
             <div className="col-span-2">
@@ -1787,7 +1787,7 @@ export default function App() {
         </div>
       </footer>
 
-      <a href="https://api.whatsapp.com/send?phone=5511951161563&text=Ol%C3%A1+Acabei+de+assinar+um+plano%2C+como+proceder+agora%3F" target="_blank" rel="noopener noreferrer" className="fixed bottom-8 right-8 z-[90] bg-[#25D366] hover:bg-[#128C7E] text-white p-4 rounded-full shadow-2xl transition-all hover:scale-110 group">
+      <a href="https://api.whatsapp.com/send?phone=5511951161563&text=Ol%C3%A1+Acabei+de+assinar+um+plano%2C+como+proceder+agora%3F" target="_blank" rel="noopener noreferrer" className="fixed bottom-8 right-8 z-40 bg-[#25D366] hover:bg-[#128C7E] text-white p-4 rounded-full shadow-2xl transition-all hover:scale-110 group">
         <MessageCircle className="w-8 h-8" />
         <span className="absolute right-full mr-4 top-1/2 -translate-y-1/2 bg-white text-black px-4 py-2 rounded-xl text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl">Fale Conosco</span>
       </a>
