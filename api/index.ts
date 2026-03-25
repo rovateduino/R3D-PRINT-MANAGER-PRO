@@ -204,6 +204,236 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // ── ADMIN: LIMPAR DADOS DE TESTE (inclui cupons) ───────────────────────────
+    if (url === '/api/admin/clear-test-data' && method === 'DELETE') {
+      if (!isAdmin) return res.status(401).json({ message: 'Não autorizado' });
+      const collections = ['activations', 'payments', 'users', 'licenses', 'activations_by_payment', 'cupons', 'trials_hwid', 'trials_email'];
+      const results: any = {};
+      try {
+        for (const col of collections) {
+          const snapshot = await db.collection(col).get();
+          const batch = db.batch();
+          snapshot.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          results[col] = { deleted: snapshot.size };
+        }
+        return res.json({ success: true, message: 'Dados de teste (incluindo cupons) removidos com sucesso.', results });
+      } catch (e: any) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    // ── Asaas: Webhook ──────────────────────────────────────────────────────────
+    if (url.includes('/api/asaas/webhook') && method === 'POST') {
+      const body = req.body;
+      const event = Array.isArray(body) ? body[0] : body;
+      const payment = event?.payment;
+
+      const webhookToken = req.headers['asaas-access-token'];
+      const isSimulated = webhookToken === 'SIMULATED_TOKEN';
+      const configuredToken = process.env.ASAAS_WEBHOOK_TOKEN;
+
+      console.log(`[Webhook] Evento: ${event?.event}, Pagamento: ${payment?.id}, Simulado: ${isSimulated}`);
+
+      if (configuredToken && !isSimulated && webhookToken !== configuredToken) {
+        console.warn('[Webhook] Token inválido');
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      if (!payment) {
+        console.warn('[Webhook] Pagamento ausente no corpo');
+        return res.status(400).json({ message: 'Missing payment' });
+      }
+
+      // Resposta rápida para o Asaas para evitar timeout
+      res.status(200).send('OK');
+
+      try {
+        // Usa a instância 'db' (Firebase Admin) em vez do REST
+        await db.collection('payments').doc(payment.id).set({
+          paymentId: payment.id,
+          status: payment.status,
+          event: event.event,
+          value: payment.value,
+          customer: payment.customer,
+          billingType: payment.billingType || '',
+          installmentNumber: payment.installmentNumber || 1,
+          processedAt: new Date().toISOString(),
+          externalReference: payment.externalReference || '',
+          isSimulated,
+        }, { merge: true });
+
+        if (event.event === 'PAYMENT_CONFIRMED' || event.event === 'PAYMENT_RECEIVED') {
+          const extRef = payment.externalReference || '';
+          const parts = extRef.split(':');
+          const hasCoupon = parts[0] === 'COUPON';
+          const couponCode = hasCoupon ? parts[1] : '';
+          const planName = hasCoupon
+            ? parts.slice(2, parts.length - 1).join(' ')
+            : parts.slice(1, parts.length - 1).join(' ');
+
+          const installmentNumber = payment.installmentNumber || 1;
+          const isFirstInstallment = installmentNumber === 1;
+
+          let customerEmail = '';
+          let customerName = '';
+
+          if (isSimulated) {
+            customerEmail = payment.customerEmail || 'teste@exemplo.com';
+            customerName = payment.customerName || 'Cliente Teste';
+          } else {
+            try {
+              const cr = await axios.get(`${asaasUrl()}/customers/${payment.customer}`, {
+                headers: { access_token: process.env.ASAAS_API_KEY || '' }
+              });
+              customerEmail = cr.data.email || '';
+              customerName = cr.data.name || '';
+            } catch (e) { console.error('Erro ao buscar cliente:', e); }
+          }
+
+          if (customerEmail && isFirstInstallment) {
+            await db.collection('users').doc(customerEmail).set({
+              email: customerEmail,
+              isPro: true,
+              subscriptionId: payment.installment || payment.id,
+              plano: planName,
+              updatedAt: new Date().toISOString(),
+            }, { merge: true });
+
+            const actByPaySnap = await db.collection('activations_by_payment').doc(payment.id).get();
+            let generatedCode = null;
+
+            if (actByPaySnap.exists) {
+              generatedCode = actByPaySnap.data()?.code;
+            } else {
+              const code = `R3D-ACT-${randomBytes(6).toString('hex').toUpperCase().match(/.{1,4}/g)?.join('-')}`;
+              generatedCode = code;
+              const expirationDate = new Date();
+              expirationDate.setDate(expirationDate.getDate() + 7);
+
+              const activationData = {
+                code,
+                paymentId: payment.id,
+                email: customerEmail,
+                name: customerName,
+                plano: planName || 'PRO',
+                status: 'PENDING',
+                createdAt: new Date().toISOString(),
+                expiresAt: expirationDate.toISOString(),
+              };
+
+              await db.collection('activations').doc(code).set(activationData);
+              await db.collection('activations_by_payment').doc(payment.id).set({ code });
+              console.log(`[Activation] Código gerado: ${code} para ${customerEmail}`);
+
+              try {
+                const emailHtml = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+                    <h2 style="color:#C67D3D">Parabéns pela sua compra! 🎉</h2>
+                    <p>Olá ${customerName}, seu pagamento foi confirmado.</p>
+                    <p>Aqui está seu código de ativação para o R3D Print Manager Pro:</p>
+                    <div style="background:#1a1a1a;color:white;padding:20px;border-radius:12px;text-align:center;margin:20px 0">
+                      <h1 style="color:#C67D3D;font-size:32px;margin:10px 0">${code}</h1>
+                    </div>
+                    <p><strong>Instruções:</strong></p>
+                    <ol>
+                      <li>Baixe o aplicativo: <a href="https://r3dprintmanagerpro.com.br/api/download">Clique aqui para baixar</a></li>
+                      <li>Abra o aplicativo e insira o código acima quando solicitado.</li>
+                      <li>O sistema irá gerar sua licença final vinculada ao seu computador.</li>
+                    </ol>
+                    <p style="margin-top:20px;color:#ff4444"><strong>Atenção:</strong> Este código expira em 7 dias se não for utilizado.</p>
+                    <p>Dúvidas? Responda este e-mail.</p>
+                  </div>`;
+
+                await sendEmail(customerEmail, 'Seu código de ativação R3D Print Manager Pro', emailHtml);
+
+                if (isSimulated && process.env.ADMIN_EMAIL && process.env.ADMIN_EMAIL !== customerEmail) {
+                  await sendEmail(process.env.ADMIN_EMAIL, `[SIMULAÇÃO] Código de Ativação - ${customerEmail}`, emailHtml);
+                }
+              } catch (emailErr) {
+                console.error('Erro ao enviar e-mail de ativação:', emailErr);
+              }
+            }
+          }
+
+          if (couponCode && isFirstInstallment) {
+            const couponSnap = await db.collection('cupons').doc(couponCode.toUpperCase()).get();
+
+            if (couponSnap.exists) {
+              const coupon = couponSnap.data()!;
+              const existingVendas = Array.isArray(coupon.vendas) ? coupon.vendas : [];
+              const installmentId = payment.installment || payment.id;
+              const jaProcessado = existingVendas.some((v: any) =>
+                v.installmentId === installmentId || v.paymentId === payment.id
+              );
+
+              if (!jaProcessado) {
+                const novaVenda = {
+                  paymentId: payment.id,
+                  installmentId,
+                  plano: planName || 'N/A',
+                  valor: payment.value,
+                  cliente: customerName,
+                  email: customerEmail,
+                  afiliado: coupon.afiliado_nome || '',
+                  data: new Date().toISOString(),
+                };
+
+                const updatedVendas = [...existingVendas, novaVenda];
+                const novosUsos = (Number(coupon.usos) || 0) + 1;
+
+                await db.collection('cupons').doc(coupon.codigo || couponCode.toUpperCase()).set({
+                  ...coupon,
+                  usos: novosUsos,
+                  vendas: updatedVendas,
+                }, { merge: true });
+
+                if (coupon.afiliado_email) {
+                  await sendEmail(
+                    coupon.afiliado_email,
+                    `🎉 Nova venda com seu cupom ${coupon.codigo}!`,
+                    `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+                      <h2 style="color:#C67D3D">Nova venda realizada! 🚀</h2>
+                      <p>Olá ${coupon.afiliado_nome}, seu cupom gerou mais uma venda!</p>
+                      <div style="background:#1a1a1a;color:white;padding:20px;border-radius:12px;margin:20px 0">
+                        <p><strong style="color:#C67D3D">Cupom:</strong> ${coupon.codigo}</p>
+                        <p><strong style="color:#C67D3D">Plano adquirido:</strong> ${planName || 'N/A'}</p>
+                        <p><strong style="color:#C67D3D">Cliente:</strong> ${customerName}</p>
+                        <p><strong style="color:#C67D3D">Valor:</strong> R$ ${payment.value.toFixed(2)}</p>
+                        <p><strong style="color:#C67D3D">Total de usos:</strong> ${novosUsos}</p>
+                        <p><strong style="color:#C67D3D">Data:</strong> ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}</p>
+                      </div>
+                    </div>`
+                  );
+                }
+
+                if (process.env.ADMIN_EMAIL) {
+                  await sendEmail(
+                    process.env.ADMIN_EMAIL,
+                    `Nova venda com cupom — ${coupon.codigo}`,
+                    `<div style="font-family:Arial,sans-serif">
+                      <h3>Nova venda com cupom de afiliado</h3>
+                      <p><strong>Cupom:</strong> ${coupon.codigo}</p>
+                      <p><strong>Plano:</strong> ${planName || 'N/A'}</p>
+                      <p><strong>Afiliado:</strong> ${coupon.afiliado_nome} (${coupon.afiliado_email})</p>
+                      <p><strong>Cliente:</strong> ${customerName} (${customerEmail})</p>
+                      <p><strong>Valor:</strong> R$ ${payment.value.toFixed(2)}</p>
+                      <p><strong>Total de usos:</strong> ${novosUsos}</p>
+                      <p><strong>Data:</strong> ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}</p>
+                    </div>`
+                  );
+                }
+              }
+            }
+          }
+        }
+        return; // Já respondemos com 200 OK no início
+      } catch (e: any) {
+        console.error('[Webhook] Erro:', e);
+        // Não enviamos erro 500 aqui porque já respondemos 200 OK
+      }
+      return;
+    }
+
     // ── Validar cupom ───────────────────────────────────────────────────────────
     if (url.includes('/api/cupom/validar') && method === 'GET') {
       const codigo = String(req.query?.codigo || url.split('codigo=')[1]?.split('&')[0]);
