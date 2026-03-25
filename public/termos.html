@@ -4,78 +4,33 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Termos de Uso - R3D Print Manager Pro</title>
-    <!-- Tailwind CSS CDN para estilização rápida -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Ícones Lucide (CDN) -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        /* Personalizações adicionais */
-        body {
-            background-color: #0f0f0f;
-            color: #e5e5e5;
-            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-        .text-gold {
-            color: #C67D3D;
-        }
-        .border-gold {
-            border-color: #C67D3D;
-        }
-        .bg-gold-gradient {
-            background: linear-gradient(135deg, #C67D3D, #EA580C);
-        }
-        .term-content h1, .term-content h2, .term-content h3 {
-            color: #fff;
-            font-weight: 700;
-            margin-top: 1.5rem;
-            margin-bottom: 0.75rem;
-        }
-        .term-content h1 {
-            font-size: 1.8rem;
-            border-left: 4px solid #C67D3D;
-            padding-left: 1rem;
-        }
-        .term-content h2 {
-            font-size: 1.4rem;
-            border-left: 3px solid #C67D3D;
-            padding-left: 0.75rem;
-        }
-        .term-content h3 {
-            font-size: 1.2rem;
-            margin-top: 1rem;
-        }
-        .term-content p, .term-content li {
-            line-height: 1.6;
-            color: #cbd5e1;
-            margin-bottom: 0.75rem;
-        }
-        .term-content ul, .term-content ol {
-            margin: 1rem 0 1rem 2rem;
-        }
-        .term-content li {
-            margin-bottom: 0.3rem;
-        }
-        .term-content strong {
-            color: #fff;
-        }
-        .term-content a {
-            color: #C67D3D;
-            text-decoration: underline;
-        }
-        .term-content hr {
-            border-color: #2d2d2d;
-            margin: 1.5rem 0;
-        }
+        body { background-color: #0f0f0f; color: #e5e5e5; font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .text-gold { color: #C67D3D; }
+        .border-gold { border-color: #C67D3D; }
+        .bg-gold-gradient { background: linear-gradient(135deg, #C67D3D, #EA580C); }
+        .term-content h1, .term-content h2, .term-content h3 { color: #fff; font-weight: 700; margin-top: 1.5rem; margin-bottom: 0.75rem; }
+        .term-content h1 { font-size: 1.8rem; border-left: 4px solid #C67D3D; padding-left: 1rem; }
+        .term-content h2 { font-size: 1.4rem; border-left: 3px solid #C67D3D; padding-left: 0.75rem; }
+        .term-content h3 { font-size: 1.2rem; margin-top: 1rem; }
+        .term-content p, .term-content li { line-height: 1.6; color: #cbd5e1; margin-bottom: 0.75rem; }
+        .term-content ul, .term-content ol { margin: 1rem 0 1rem 2rem; }
+        .term-content li { margin-bottom: 0.3rem; }
+        .term-content strong { color: #fff; }
+        .term-content a { color: #C67D3D; text-decoration: underline; }
+        .term-content hr { border-color: #2d2d2d; margin: 1.5rem 0; }
     </style>
 </head>
 <body class="bg-[#0f0f0f] text-gray-300 antialiased">
 
-    <!-- NAVBAR (igual ao site principal) -->
     <nav class="fixed w-full z-50 bg-[#0f0f0f]/95 backdrop-blur-md border-b border-white/5 py-3">
         <div class="max-w-7xl mx-auto px-6 flex justify-between items-center">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 overflow-hidden">
-                    <img src="https://r3dprintmanagerpro.com.br/src/assets/logo_r3d.png" alt="R3D Pro" class="w-full h-full object-contain" style="clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);">
+                    <!-- CORREÇÃO: usa a imagem na pasta public -->
+                    <img src="/logo_r3d.png" alt="R3D Pro" class="w-full h-full object-contain" style="clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);">
                 </div>
                 <span class="text-xl font-bold tracking-tight text-white">R3D <span class="text-[#C67D3D]">Pro</span></span>
             </div>
@@ -90,7 +45,6 @@
         </div>
     </nav>
 
-    <!-- CONTEÚDO PRINCIPAL -->
     <main class="pt-32 pb-20 px-6 max-w-4xl mx-auto">
         <div class="bg-[#1a1a1a] rounded-3xl border border-white/10 p-8 md:p-12 shadow-2xl">
             <div class="flex items-center gap-3 mb-8">
@@ -99,11 +53,9 @@
                 </a>
             </div>
             <div class="term-content">
-                <!-- TÍTULO -->
                 <h1 class="text-3xl md:text-4xl font-black text-white mb-2">Termos de Uso e Política de Licenciamento</h1>
                 <p class="text-[#C67D3D] text-sm mb-8">Última atualização: 26 de março de 2026</p>
 
-                <!-- CONTEÚDO COMPLETO DO TERMO (conforme versão unificada) -->
                 <p>Este documento estabelece os termos e condições para o uso do software R3D Print Manager Pro (“Software”), desenvolvido e comercializado por <strong>R3D</strong> (“Licenciante”). Ao adquirir, baixar, instalar, ativar ou utilizar o Software, o usuário (“Licenciado”) declara ter lido, compreendido e aceitado integralmente as disposições abaixo.</p>
 
                 <h2>1. CONCESSÃO DE LICENÇA</h2>
@@ -204,14 +156,14 @@
         </div>
     </main>
 
-    <!-- FOOTER (igual ao site principal) -->
     <footer class="py-16 border-t border-white/5 bg-[#080808]">
         <div class="max-w-7xl mx-auto px-6">
             <div class="grid md:grid-cols-4 gap-12 mb-12">
                 <div class="col-span-2">
                     <div class="flex items-center gap-3 mb-6">
                         <div class="w-10 h-10 overflow-hidden">
-                            <img src="https://r3dprintmanagerpro.com.br/src/assets/logo_r3d.png" alt="Logo" class="w-full h-full object-contain" style="clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);">
+                            <!-- CORREÇÃO: mesma imagem pública -->
+                            <img src="/logo_r3d.png" alt="Logo" class="w-full h-full object-contain" style="clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);">
                         </div>
                         <span class="text-xl font-bold text-white">R3D <span class="text-[#C67D3D]">Pro</span></span>
                     </div>
@@ -246,9 +198,7 @@
     </footer>
 
     <script>
-        // Ativa os ícones Lucide
         lucide.createIcons();
-        // Mobile menu placeholder (simples)
         document.getElementById('mobile-menu-btn')?.addEventListener('click', () => {
             alert('Menu mobile – acesse pelo site principal');
         });
