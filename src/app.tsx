@@ -146,32 +146,49 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
   const [boletoUrl, setBoletoUrl] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', email: '', cpfCnpj: '', phone: '', postalCode: '', addressNumber: '', cardNumber: '', cardHolder: '', cardExpiry: '', cardCcv: '' });
   const [realCode, setRealCode] = useState<string | null>(null);
-  const [polling, setPolling] = useState(false);
 
-  useEffect(() => {
-    let interval: any;
-    if (polling && (pixData || boletoUrl) && !success) {
-      interval = setInterval(async () => {
-        try {
-          const res = await fetch(`/api/user/status/${formData.email}`);
-          const data = await res.json();
-          if (data.isPro) {
-            const recRes = await fetch(`/api/license/recover?email=${formData.email}`);
-            const recData = await recRes.json();
-            if (Array.isArray(recData) && recData.length > 0) {
-              const latest = recData.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-              setRealCode(latest.code);
-              setSuccess(true);
-              setPolling(false);
-            }
-          }
-        } catch (e) {
-          console.error('Erro no polling:', e);
-        }
-      }, 5000);
+  const simulateActivation = async () => {
+    if (!formData.email) {
+      setError('Preencha o e-mail antes de simular o pagamento.');
+      setStep(1);
+      return;
     }
-    return () => clearInterval(interval);
-  }, [polling, pixData, boletoUrl, success, formData.email]);
+    setSimulating(true);
+    setError(null);
+    try {
+      const extRef = couponData
+        ? `COUPON:${couponData.codigo}:${plan.name}:${Date.now()}`
+        : `REF:${plan.name}:${Date.now()}`;
+
+      const response = await fetch('/api/simulate-activation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-simulate-token': 'SIMULATED_TOKEN',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          name: formData.name,
+          plano: plan.name,
+          couponCode: couponData?.codigo,
+          paymentId: extRef,
+        }),
+      });
+      const data = await response.json();
+      if (response.ok && data.code) {
+        setSimulatedCode(data.code);
+        setSuccess(true);
+        setPixData(null);
+        setBoletoUrl(null);
+      } else {
+        setError(data.message || 'Erro na simulação');
+      }
+    } catch (err) {
+      setError('Erro de conexão na simulação');
+    } finally {
+      setSimulating(false);
+    }
+  };
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => { setFormData({ ...formData, [e.target.name]: e.target.value }); if (error) setError(null); };
   const getBasePrice = () => parseFloat(plan.price.replace('R$ ', '').replace(/\./g, '').replace(',', '.'));
@@ -197,50 +214,6 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
     setCheckingStatus(true);
     try { setUserStatus(await (await fetch(`/api/user/status/${formData.email}`)).json()); }
     catch {} finally { setCheckingStatus(false); }
-  };
-
-  const simulateWebhook = async () => {
-    if (!formData.email) {
-      setError('Preencha o e-mail antes de simular o pagamento.');
-      setStep(1);
-      return;
-    }
-    setSimulating(true);
-    setError(null);
-    try {
-      const extRef = couponData ? `COUPON:${couponData.codigo}:${plan.name}:${Date.now()}` : `REF:${plan.name}:${Date.now()}`;
-      const resp = await fetch('/api/asaas/webhook', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'asaas-access-token': 'SIMULATED_TOKEN' },
-        body: JSON.stringify({
-          id: `evt_sim_${Date.now()}`,
-          event: 'PAYMENT_CONFIRMED',
-          dateCreated: new Date().toISOString(),
-          payment: {
-            id: `pay_sim_${Date.now()}`,
-            customer: 'cus_sim',
-            customerEmail: formData.email,
-            customerName: formData.name || 'Cliente',
-            value: getDiscountedPrice(),
-            status: 'CONFIRMED',
-            description: `Assinatura R3D Pro - ${plan.name}`,
-            externalReference: extRef
-          }
-        })
-      });
-      const data = await resp.json();
-      if (resp.ok) {
-        if (data.code) {
-          setSimulatedCode(data.code);
-          setSuccess(true);
-          setPixData(null);
-          setBoletoUrl(null);
-        } else {
-          setError('Simulação enviada! Nenhum código foi gerado (verifique se o e-mail foi preenchido corretamente).');
-        }
-      } else {
-        setError(`Erro na simulação: ${data.message || data.error}`);
-      }
-    } catch { setError('Erro de conexão na simulação'); } finally { setSimulating(false); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -335,8 +308,8 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
                 {import.meta.env.VITE_ASAAS_ENV !== 'production' && (
                   <div className="flex items-center gap-1">
                     <span className="bg-yellow-500/10 text-yellow-500 text-[9px] px-2 py-0.5 rounded-full font-bold border border-yellow-500/20">TESTE</span>
-                    <button type="button" onClick={simulateWebhook} disabled={simulating} className="bg-blue-500/10 text-blue-400 text-[9px] px-2 py-0.5 rounded-full font-bold border border-blue-500/20 flex items-center gap-1">
-                      {simulating ? <Loader2 className="w-2 h-2 animate-spin" /> : null}SIM. WEBHOOK
+                    <button type="button" onClick={simulateActivation} disabled={simulating} className="bg-blue-500/10 text-blue-400 text-[9px] px-2 py-0.5 rounded-full font-bold border border-blue-500/20 flex items-center gap-1">
+                      {simulating ? <Loader2 className="w-2 h-2 animate-spin" /> : null}SIM. ATIVAÇÃO DIRETA
                     </button>
                   </div>
                 )}
