@@ -1,74 +1,149 @@
 import { createCipheriv, createHash, randomBytes } from 'crypto';
 import axios from 'axios';
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { initializeApp, getApps, cert, ServiceAccount } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 
 // ============================================================
-// CONFIGURAÇÃO DO DATABASE ID (IMPORTANTE!)
+// CONFIGURAÇÃO DO FIRESTORE (REST API)
 // ============================================================
-// Seu Database ID do Firebase - pego do firebase-applet-config.json
+
+const FIREBASE_PROJECT_ID = 'gen-lang-client-0364203262';
 const FIREBASE_DATABASE_ID = 'ai-studio-ee7c5fd5-11f5-4e50-a979-3316fea33a21';
+const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL || 'firebase-adminsdk-fbsvc@gen-lang-client-0364203262.iam.gserviceaccount.com';
+const FIREBASE_PRIVATE_KEY = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n') || '';
 
-// ============================================================
-// INICIALIZAÇÃO DO FIREBASE ADMIN SDK (CORRIGIDA)
-// ============================================================
+let cachedToken: string | null = null;
+let tokenExpiry = 0;
 
-let db: FirebaseFirestore.Firestore;
-
-try {
-  // Carrega a conta de serviço do ambiente
-  const saJson = process.env.FIREBASE_SERVICE_ACCOUNT;
-  
-  if (!saJson) {
-    console.error('ERRO: FIREBASE_SERVICE_ACCOUNT não configurada no ambiente');
-    console.error('Por favor, configure esta variável no painel da Vercel');
-    throw new Error('FIREBASE_SERVICE_ACCOUNT não configurada');
-  }
-  
-  const serviceAccount: ServiceAccount = JSON.parse(saJson);
-  
-  if (!getApps().length) {
-    console.log('Inicializando Firebase Admin SDK...');
-    console.log('Project ID:', serviceAccount.projectId);
-    console.log('Database ID:', FIREBASE_DATABASE_ID);
+async function getFirebaseToken() {
+  try {
+    if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
     
-    initializeApp({
-      credential: cert(serviceAccount),
-      projectId: serviceAccount.projectId,
+    console.log('[Firebase] Gerando novo token JWT...');
+    
+    const header = { alg: 'RS256', typ: 'JWT' };
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+      iss: FIREBASE_CLIENT_EMAIL,
+      sub: FIREBASE_CLIENT_EMAIL,
+      scope: 'https://www.googleapis.com/auth/datastore',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600,
+    };
+
+    const sHeader = Buffer.from(JSON.stringify(header)).toString('base64url');
+    const sPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const { sign } = await import('crypto');
+    const signature = sign('sha256', Buffer.from(`${sHeader}.${sPayload}`), FIREBASE_PRIVATE_KEY).toString('base64url');
+
+    const res = await axios.post('https://oauth2.googleapis.com/token', {
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: `${sHeader}.${sPayload}.${signature}`,
     });
-    
-    console.log('Firebase Admin SDK inicializado com sucesso');
-  }
-  
-  // IMPORTANTE: Usar o Database ID específico
-  db = getFirestore().settings({
-    databaseId: FIREBASE_DATABASE_ID
-  }) as any;
-  
-  // Teste de conexão
-  console.log('Firestore conectado com Database ID:', FIREBASE_DATABASE_ID);
-  
-  // Teste rápido para verificar se consegue ler
-  const testDoc = await db.collection('_health_check').doc('test').get();
-  console.log('Teste de leitura Firestore:', testDoc.exists ? 'sucesso' : 'coleção vazia');
-  
-} catch (error: any) {
-  console.error('Erro fatal ao inicializar Firebase:', error.message);
-  console.error('Stack:', error.stack);
-  
-  // Em desenvolvimento, podemos criar um fallback, mas em produção isso falha
-  if (process.env.NODE_ENV !== 'production') {
-    console.warn('⚠️ Modo desenvolvimento: usando fallback');
-    if (!getApps().length) {
-      initializeApp({
-        projectId: 'gen-lang-client-0364203262',
-      });
-    }
-    db = getFirestore();
-  } else {
+
+    cachedToken = res.data.access_token;
+    tokenExpiry = Date.now() + 3500 * 1000;
+    console.log('[Firebase] Token obtido com sucesso');
+    return cachedToken;
+  } catch (error: any) {
+    console.error('[Firebase] Erro ao obter token:', error.response?.data || error.message);
     throw error;
   }
+}
+
+async function fsRequest(method: string, path: string, data?: any) {
+  const token = await getFirebaseToken();
+  let url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents/${path}`;
+
+  if (method === 'PATCH' && data) {
+    const fields = Object.keys(data);
+    const mask = fields.map(f => `updateMask.fieldPaths=${f}`).join('&');
+    url += `?${mask}`;
+  }
+
+  const res = await axios({
+    method,
+    url,
+    data: data ? { fields: encodeFields(data) } : undefined,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return decodeFields(res.data.fields || {});
+}
+
+async function fsList(collection: string) {
+  const token = await getFirebaseToken();
+  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents/${collection}`;
+  try {
+    const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+    console.log(`[Firestore] List ${collection}: found ${res.data.documents?.length || 0} docs`);
+    return (res.data.documents || []).map((doc: any) => ({
+      id: doc.name.split('/').pop(),
+      ...decodeFields(doc.fields || {}),
+    }));
+  } catch (e: any) {
+    if (e.response?.status === 404) return [];
+    console.error(`[Firestore] List ${collection} error:`, e.response?.data || e.message);
+    throw e;
+  }
+}
+
+async function fsGet(collection: string, id: string) {
+  try { 
+    return await fsRequest('GET', `${collection}/${id}`);
+  } catch (e: any) { 
+    if (e.response?.status === 404) return null; 
+    throw e;
+  }
+}
+
+async function fsSet(collection: string, id: string, data: any) {
+  return fsRequest('PATCH', `${collection}/${id}`, data);
+}
+
+async function fsCreate(collection: string, id: string, data: any) {
+  return fsRequest('POST', `${collection}?documentId=${id}`, data);
+}
+
+async function fsDelete(collection: string, id: string) {
+  const token = await getFirebaseToken();
+  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents/${collection}/${id}`;
+  console.log(`[Firestore] Deleting ${collection}/${id}...`);
+  try {
+    const res = await axios.delete(url, { headers: { Authorization: `Bearer ${token}` } });
+    console.log(`[Firestore] Deleted ${collection}/${id} successfully`);
+    return res.data;
+  } catch (e: any) {
+    console.error(`[Firestore] Delete ${collection}/${id} error:`, e.response?.data || e.message);
+    throw e;
+  }
+}
+
+function encodeFields(obj: any): any {
+  const fields: any = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (typeof val === 'string') fields[key] = { stringValue: val };
+    else if (typeof val === 'number') fields[key] = { doubleValue: val };
+    else if (typeof val === 'boolean') fields[key] = { booleanValue: val };
+    else if (Array.isArray(val)) fields[key] = { arrayValue: { values: val.map(v => encodeFields({ temp: v }).temp) } };
+    else if (val && typeof val === 'object') fields[key] = { mapValue: { fields: encodeFields(val) } };
+    else fields[key] = { nullValue: null };
+  }
+  return fields;
+}
+
+function decodeFields(fields: any): any {
+  const obj: any = {};
+  for (const [key, val] of Object.entries(fields)) {
+    const v: any = val;
+    if ('stringValue' in v) obj[key] = v.stringValue;
+    else if ('doubleValue' in v) obj[key] = Number(v.doubleValue);
+    else if ('integerValue' in v) obj[key] = Number(v.integerValue);
+    else if ('booleanValue' in v) obj[key] = v.booleanValue;
+    else if ('arrayValue' in v) obj[key] = (v.arrayValue.values || []).map((item: any) => decodeFields({ temp: item }).temp);
+    else if ('mapValue' in v) obj[key] = decodeFields(v.mapValue.fields || {});
+    else obj[key] = null;
+  }
+  return obj;
 }
 
 // ============================================================
@@ -128,42 +203,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const clientPass = req.headers['x-admin-password'];
     const isAdmin = clientPass === ADMIN_PASS;
 
-    // ── Health Check (CORRIGIDO) ──────────────────────────────────────────────
+    // ── Health Check ──────────────────────────────────────────────────────────
     if (url === '/api/health' || url === '/api/health/') {
       try {
-        // Testa conexão com Firestore usando o Database ID correto
-        const testRef = db.collection('_health_check').doc('test');
-        await testRef.set({ 
+        // Testa conexão com Firestore
+        const testData = await fsSet('_health_check', 'test', { 
           timestamp: new Date().toISOString(),
           message: 'R3D Pro API is alive'
         });
         
-        // Tenta listar algumas coleções para verificar permissões
-        const collections = await db.listCollections();
-        const collectionNames: string[] = [];
-        for (const col of collections) {
-          collectionNames.push(col.id);
-        }
+        // Tenta listar algumas coleções
+        const activations = await fsList('activations');
         
         return res.json({ 
           status: 'ok', 
           firebase: true,
           databaseId: FIREBASE_DATABASE_ID,
-          projectId: process.env.FIREBASE_SERVICE_ACCOUNT ? 
-            JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}').projectId : 
-            'unknown',
-          collections: collectionNames.slice(0, 10), // primeiras 10 coleções
+          projectId: FIREBASE_PROJECT_ID,
+          collectionsCount: {
+            activations: activations.length
+          },
           asaasEnv: process.env.ASAAS_ENV || 'sandbox',
           timestamp: new Date().toISOString()
         });
       } catch (e: any) {
-        console.error('[Health] Erro detalhado:', e);
+        console.error('[Health] Erro detalhado:', e.response?.data || e.message);
         return res.json({
           status: 'degraded',
           firebase: false,
           error: e.message,
-          code: e.code,
+          details: e.response?.data || e.message,
           databaseId: FIREBASE_DATABASE_ID,
+          projectId: FIREBASE_PROJECT_ID,
           timestamp: new Date().toISOString()
         });
       }
@@ -174,26 +245,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const codigo = req.query?.codigo || url.split('codigo=')[1]?.split('&')[0];
       if (!codigo) return res.status(400).json({ message: 'Código ausente' });
       
-      const couponDoc = await db.collection('cupons').doc(String(codigo).toUpperCase()).get();
-      if (!couponDoc.exists) return res.status(404).json({ message: 'Cupom inválido ou inativo' });
-      
-      const coupon = couponDoc.data();
-      if (!coupon?.ativo) return res.status(404).json({ message: 'Cupom inválido ou inativo' });
+      const coupon = await fsGet('cupons', String(codigo).toUpperCase());
+      if (!coupon || !coupon.ativo) return res.status(404).json({ message: 'Cupom inválido ou inativo' });
       if (coupon.limite_usos && coupon.usos >= coupon.limite_usos) {
         return res.status(400).json({ message: 'Limite de usos atingido' });
       }
       if (coupon.validade && new Date(coupon.validade) < new Date()) {
         return res.status(400).json({ message: 'Cupom expirado' });
       }
-      return res.json({ id: couponDoc.id, ...coupon });
+      return res.json({ id: codigo, ...coupon });
     }
 
     // ── Admin: Listar cupons ───────────────────────────────────────────────────
     if (url.includes('/api/admin/cupons') && method === 'GET') {
       if (!isAdmin) return res.status(401).json({ message: 'Senha incorreta' });
-      const snapshot = await db.collection('cupons').get();
-      const cupons = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      return res.json(cupons);
+      try { 
+        const cupons = await fsList('cupons');
+        return res.json(cupons);
+      } catch (e: any) { 
+        return res.status(500).json({ message: 'Erro ao listar', error: e.message }); 
+      }
     }
 
     // ── Admin: Criar cupom ─────────────────────────────────────────────────────
@@ -203,7 +274,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const data = req.body;
         const codigo = String(data.codigo).toUpperCase().trim();
         
-        await db.collection('cupons').doc(codigo).set({
+        await fsSet('cupons', codigo, {
           codigo,
           tipo: data.tipo || 'PERCENTUAL',
           valor: Number(data.valor) || 0,
@@ -233,8 +304,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           );
         }
         return res.json({ success: true });
-      } catch (e: any) {
-        return res.status(500).json({ message: 'Erro ao criar', error: e.message });
+      } catch (e: any) { 
+        return res.status(500).json({ message: 'Erro ao criar', error: e.message }); 
       }
     }
 
@@ -243,10 +314,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!isAdmin) return res.status(401).json({ message: 'Senha incorreta' });
       const id = url.split('/api/admin/cupom/')[1]?.split('?')[0];
       try {
-        await db.collection('cupons').doc(id).update(req.body);
+        const existing = await fsGet('cupons', id);
+        await fsSet('cupons', id, { ...existing, ...req.body });
         return res.json({ success: true });
-      } catch (e: any) {
-        return res.status(500).json({ message: 'Erro ao atualizar', error: e.message });
+      } catch (e: any) { 
+        return res.status(500).json({ message: 'Erro ao atualizar', error: e.message }); 
       }
     }
 
@@ -255,7 +327,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!isAdmin) return res.status(401).json({ message: 'Senha incorreta' });
       const id = url.split('/').pop();
       if (!id) return res.status(400).json({ error: 'ID ausente' });
-      await db.collection('cupons').doc(id).delete();
+      await fsDelete('cupons', id);
       return res.json({ success: true });
     }
 
@@ -325,7 +397,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Processamento assíncrono
       (async () => {
         try {
-          await db.collection('payments').doc(payment.id).set({
+          await fsSet('payments', payment.id, {
             paymentId: payment.id,
             status: payment.status,
             event: event.event,
@@ -336,7 +408,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             processedAt: new Date().toISOString(),
             externalReference: payment.externalReference || '',
             isSimulated,
-          }, { merge: true });
+          });
 
           if (event.event === 'PAYMENT_CONFIRMED' || event.event === 'PAYMENT_RECEIVED') {
             const extRef = payment.externalReference || '';
@@ -369,26 +441,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
 
             if (customerEmail && isFirstInstallment) {
-              await db.collection('users').doc(customerEmail).set({
+              await fsSet('users', customerEmail, {
                 email: customerEmail,
                 isPro: true,
                 subscriptionId: payment.installment || payment.id,
                 plano: planName,
                 updatedAt: new Date().toISOString(),
-              }, { merge: true });
+              });
 
-              const actByPaySnap = await db.collection('activations_by_payment').doc(payment.id).get();
+              const actByPay = await fsGet('activations_by_payment', payment.id);
               let generatedCode = null;
 
-              if (actByPaySnap.exists) {
-                generatedCode = actByPaySnap.data()?.code;
+              if (actByPay) {
+                generatedCode = actByPay.code;
               } else {
                 const code = `R3D-ACT-${randomBytes(6).toString('hex').toUpperCase().match(/.{1,4}/g)?.join('-')}`;
                 generatedCode = code;
                 const expirationDate = new Date();
                 expirationDate.setDate(expirationDate.getDate() + 7);
 
-                const activationData = {
+                await fsCreate('activations', code, {
                   code,
                   paymentId: payment.id,
                   email: customerEmail,
@@ -397,10 +469,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   status: 'PENDING',
                   createdAt: new Date().toISOString(),
                   expiresAt: expirationDate.toISOString(),
-                };
-
-                await db.collection('activations').doc(code).set(activationData);
-                await db.collection('activations_by_payment').doc(payment.id).set({ code });
+                });
+                
+                await fsSet('activations_by_payment', payment.id, { code });
                 console.log(`[Activation] Código gerado: ${code} para ${customerEmail}`);
 
                 try {
@@ -429,10 +500,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
 
             if (couponCode && isFirstInstallment) {
-              const couponSnap = await db.collection('cupons').doc(couponCode.toUpperCase()).get();
+              const coupon = await fsGet('cupons', couponCode.toUpperCase());
 
-              if (couponSnap.exists) {
-                const coupon = couponSnap.data()!;
+              if (coupon) {
                 const existingVendas = Array.isArray(coupon.vendas) ? coupon.vendas : [];
                 const installmentId = payment.installment || payment.id;
                 const jaProcessado = existingVendas.some((v: any) =>
@@ -454,11 +524,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   const updatedVendas = [...existingVendas, novaVenda];
                   const novosUsos = (Number(coupon.usos) || 0) + 1;
 
-                  await db.collection('cupons').doc(coupon.codigo || couponCode.toUpperCase()).set({
+                  await fsSet('cupons', coupon.codigo || couponCode.toUpperCase(), {
                     ...coupon,
                     usos: novosUsos,
                     vendas: updatedVendas,
-                  }, { merge: true });
+                  });
 
                   if (coupon.afiliado_email) {
                     await sendEmail(
@@ -493,8 +563,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ── Status do usuário ─────────────────────────────────────────────────────
     if (url.includes('/api/user/status/') && method === 'GET') {
       const email = decodeURIComponent(url.split('/api/user/status/')[1]);
-      const userDoc = await db.collection('users').doc(email).get();
-      return res.json(userDoc.exists ? userDoc.data() : { isPro: false });
+      const data = await fsGet('users', email);
+      return res.json(data || { isPro: false });
     }
 
     // ── Trial direto por HWID ─────────────────────────────────────────────────
@@ -509,16 +579,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // Verifica histórico permanente de trial
-      const trialHistory = await db.collection('trials_hwid').doc(hwid).get();
-      if (trialHistory.exists) {
+      const trialHistory = await fsGet('trials_hwid', hwid);
+      if (trialHistory) {
         return res.status(400).json({
           message: 'Este computador já utilizou o período de teste gratuito. Adquira um plano para continuar.'
         });
       }
 
       if (email) {
-        const emailHistory = await db.collection('trials_email').doc(email.toLowerCase()).get();
-        if (emailHistory.exists) {
+        const emailHistory = await fsGet('trials_email', email.toLowerCase());
+        if (emailHistory) {
           return res.status(400).json({
             message: 'Este e-mail já utilizou o período de teste gratuito.'
           });
@@ -526,10 +596,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // Verifica se já tem licença ativa
-      const existingLicense = await db.collection('licenses').doc(hwid).get();
-      if (existingLicense.exists) {
-        const lic = existingLicense.data();
-        if (lic?.plano === 'Trial') {
+      const existingLicense = await fsGet('licenses', hwid);
+      if (existingLicense) {
+        if (existingLicense.plano === 'Trial') {
           return res.status(400).json({ message: 'Este computador já possui um teste ativo.' });
         }
         return res.status(400).json({ message: 'Este computador já possui uma licença ativa.' });
@@ -551,7 +620,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const licenseKey = generateLicenseKey(payload);
 
       // Salva licença ativa
-      await db.collection('licenses').doc(hwid).set({
+      await fsSet('licenses', hwid, {
         hwid,
         plano: 'Trial',
         licenseKey,
@@ -561,7 +630,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
       // Salva histórico permanente
-      await db.collection('trials_hwid').doc(hwid).set({
+      await fsCreate('trials_hwid', hwid, {
         hwid,
         email: email || '',
         usedAt: new Date().toISOString(),
@@ -569,7 +638,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
       if (email) {
-        await db.collection('trials_email').doc(email.toLowerCase()).set({
+        await fsCreate('trials_email', email.toLowerCase(), {
           hwid,
           email: email.toLowerCase(),
           usedAt: new Date().toISOString(),
@@ -633,22 +702,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ message: 'Formato de Hardware ID (HWID) inválido.' });
       }
 
-      const activationDoc = await db.collection('activations').doc(String(finalCode).toUpperCase()).get();
-      if (!activationDoc.exists) {
-        return res.status(404).json({ message: 'Código de ativação não encontrado' });
-      }
-      
-      const activation = activationDoc.data();
-      if (activation?.status === 'USED') {
-        return res.status(400).json({ message: 'Este código já foi utilizado' });
-      }
-      if (activation?.expiresAt && new Date(activation.expiresAt) < new Date()) {
+      const activation = await fsGet('activations', String(finalCode).toUpperCase());
+      if (!activation) return res.status(404).json({ message: 'Código de ativação não encontrado' });
+      if (activation.status === 'USED') return res.status(400).json({ message: 'Este código já foi utilizado' });
+      if (activation.expiresAt && new Date(activation.expiresAt) < new Date()) {
         return res.status(400).json({ message: 'Este código expirou' });
       }
 
       const now = new Date();
       let expiration: string | null = null;
-      const plano = activation?.plano || 'Mensal';
+      const plano = activation.plano || 'Mensal';
 
       if (plano === 'Trial') {
         now.setDate(now.getDate() + 7);
@@ -680,34 +743,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const licenseKey = generateLicenseKey(payload);
 
-      await db.collection('activations').doc(String(finalCode).toUpperCase()).update({
+      await fsSet('activations', String(finalCode).toUpperCase(), {
+        ...activation,
         status: 'USED',
         hwid,
         licenseKey,
         activatedAt: new Date().toISOString()
       });
 
-      await db.collection('licenses').doc(hwid).set({
+      await fsSet('licenses', hwid, {
         hwid,
         plano,
         licenseKey,
-        email: activation?.email,
+        email: activation.email,
         activatedAt: new Date().toISOString(),
         expiration
       });
 
-      await db.collection('logs_activation').doc(`${new Date().getTime()}_${hwid}`).set({
+      await fsCreate('logs_activation', `${new Date().getTime()}_${hwid}`, {
         event: 'ACTIVATION_SUCCESS',
         code: finalCode,
         hwid,
-        email: activation?.email,
+        email: activation.email,
         timestamp: new Date().toISOString()
       });
 
       return res.json({
         success: true,
         licenseKey,
-        plano: activation?.plano,
+        plano: activation.plano,
         expiration
       });
     }
@@ -717,35 +781,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const hwid = req.query?.hwid || url.split('hwid=')[1]?.split('&')[0];
       if (!hwid) return res.status(400).json({ message: 'HWID ausente' });
 
-      const licenseDoc = await db.collection('licenses').doc(hwid).get();
-      if (!licenseDoc.exists) {
-        return res.status(404).json({ message: 'Licença não encontrada para este HWID', valid: false });
-      }
+      const license = await fsGet('licenses', hwid);
+      if (!license) return res.status(404).json({ message: 'Licença não encontrada para este HWID', valid: false });
 
-      const license = licenseDoc.data();
       const now = new Date();
-      const isExpired = license?.expiration && new Date(license.expiration) < now;
+      const isExpired = license.expiration && new Date(license.expiration) < now;
 
       if (isExpired) {
         return res.json({
           valid: false,
           message: 'Sua licença expirou. Por favor, renove seu plano.',
-          plano: license?.plano,
-          expiration: license?.expiration,
+          plano: license.plano,
+          expiration: license.expiration,
           diasRestantes: 0
         });
       }
 
       let diasRestantes = 9999;
-      if (license?.expiration) {
+      if (license.expiration) {
         const diffTime = new Date(license.expiration).getTime() - now.getTime();
         diasRestantes = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
       }
 
       return res.json({
         valid: true,
-        plano: license?.plano,
-        expiration: license?.expiration || null,
+        plano: license.plano,
+        expiration: license.expiration || null,
         diasRestantes
       });
     }
@@ -755,33 +816,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const email = req.query?.email || url.split('email=')[1]?.split('&')[0];
       if (!email) return res.status(400).json({ message: 'E-mail é obrigatório' });
 
-      const snapshot = await db.collection('activations')
-        .where('email', '==', decodeURIComponent(email).toLowerCase())
-        .get();
-      
-      const userActivations = snapshot.docs.map(doc => ({
-        code: doc.id,
-        ...doc.data()
-      }));
+      try {
+        const allActivations = await fsList('activations');
+        const userActivations = allActivations.filter((a: any) =>
+          a.email?.toLowerCase() === decodeURIComponent(email).toLowerCase()
+        );
 
-      if (userActivations.length === 0) {
-        return res.status(404).json({ message: 'Nenhuma ativação encontrada para este e-mail' });
+        if (userActivations.length === 0) {
+          return res.status(404).json({ message: 'Nenhuma ativação encontrada para este e-mail' });
+        }
+
+        return res.json(userActivations.map((a: any) => ({
+          code: a.code,
+          status: a.status,
+          createdAt: a.createdAt,
+          plano: a.plano
+        })));
+      } catch (e: any) {
+        return res.status(500).json({ message: 'Erro ao recuperar códigos' });
       }
-
-      return res.json(userActivations.map((a: any) => ({
-        code: a.code,
-        status: a.status,
-        createdAt: a.createdAt,
-        plano: a.plano
-      })));
     }
 
     // ── Admin: Listar ativações ────────────────────────────────────────────────
     if (url.includes('/api/admin/activations') && method === 'GET') {
       if (!isAdmin) return res.status(401).json({ message: 'Senha incorreta' });
-      const snapshot = await db.collection('activations').get();
-      const activations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      return res.json(activations);
+      try { 
+        const activations = await fsList('activations');
+        return res.json(activations);
+      } catch (e: any) { 
+        return res.status(500).json({ message: 'Erro ao listar ativações', error: e.message }); 
+      }
     }
 
     // ── Admin: Resetar ativação ────────────────────────────────────────────────
@@ -789,34 +853,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!isAdmin) return res.status(401).json({ message: 'Senha incorreta' });
       const code = String(url.split('/reset/')[1]?.split('?')[0]);
       if (!code) return res.status(400).json({ message: 'Código é obrigatório' });
-      
-      const activationDoc = await db.collection('activations').doc(code.toUpperCase()).get();
-      if (!activationDoc.exists) {
-        return res.status(404).json({ message: 'Ativação não encontrada' });
+      try {
+        const activation = await fsGet('activations', code.toUpperCase());
+        if (!activation) return res.status(404).json({ message: 'Ativação não encontrada' });
+        await fsSet('activations', code.toUpperCase(), { ...activation, status: 'AVAILABLE', usedAt: null, hwid: null });
+        return res.json({ message: 'Ativação resetada com sucesso' });
+      } catch (e: any) { 
+        return res.status(500).json({ message: 'Erro ao resetar ativação' }); 
       }
-      
-      await db.collection('activations').doc(code.toUpperCase()).update({
-        status: 'AVAILABLE',
-        usedAt: null,
-        hwid: null
-      });
-      
-      return res.json({ message: 'Ativação resetada com sucesso' });
     }
 
     // ── Admin: Listar licenças ─────────────────────────────────────────────────
     if (url.includes('/api/admin/licenses') && method === 'GET') {
       if (!isAdmin) return res.status(401).json({ message: 'Senha incorreta' });
-      const snapshot = await db.collection('licenses').get();
-      const licenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      return res.json(licenses);
+      try { 
+        const licenses = await fsList('licenses');
+        return res.json(licenses);
+      } catch (e: any) { 
+        return res.status(500).json({ message: 'Erro ao listar licenças' }); 
+      }
     }
 
     // ── Admin: Excluir licença ─────────────────────────────────────────────────
     if (url.includes('/api/admin/license/delete/') && method === 'DELETE') {
       if (!isAdmin) return res.status(401).json({ message: 'Senha incorreta' });
       const hwid = String(url.split('/').pop());
-      await db.collection('licenses').doc(hwid).delete();
+      await fsDelete('licenses', hwid);
       return res.json({ success: true });
     }
 
@@ -825,7 +887,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!isAdmin) return res.status(401).json({ message: 'Senha incorreta' });
       const code = String(url.split('/').pop());
       if (!code) return res.status(400).json({ error: 'Código é obrigatório' });
-      await db.collection('activations').doc(code.toUpperCase()).delete();
+      await fsDelete('activations', code.toUpperCase());
       return res.json({ success: true });
     }
 
@@ -834,20 +896,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { email, name } = req.body;
       if (!email) return res.status(400).json({ message: 'E-mail é obrigatório' });
 
-      const snapshot = await db.collection('activations')
-        .where('email', '==', email)
-        .where('plano', '==', 'Trial')
-        .get();
-      
-      if (!snapshot.empty) {
-        return res.status(400).json({ message: 'Você já solicitou um período de teste para este e-mail.' });
-      }
+      const allActivations = await fsList('activations');
+      const hasTrial = allActivations.some((a: any) => a.email === email && a.plano === 'Trial');
+      if (hasTrial) return res.status(400).json({ message: 'Você já solicitou um período de teste para este e-mail.' });
 
       const code = `R3D-TRIAL-${randomBytes(4).toString('hex').toUpperCase()}`;
       const expirationDate = new Date();
       expirationDate.setDate(expirationDate.getDate() + 7);
 
-      await db.collection('activations').doc(code).set({
+      await fsCreate('activations', code, {
         code,
         email,
         name: name || 'Usuário Trial',
@@ -880,16 +937,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ── Admin: Backup Total ────────────────────────────────────────────────────
     if (url.includes('/api/admin/backup') && method === 'GET') {
       if (!isAdmin) return res.status(401).json({ message: 'Senha incorreta' });
-      
-      const collections = ['activations', 'licenses', 'cupons', 'payments', 'trials_hwid', 'trials_email'];
-      const backup: any = { timestamp: new Date().toISOString() };
-      
-      for (const col of collections) {
-        const snapshot = await db.collection(col).get();
-        backup[col] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      try {
+        const activations = await fsList('activations');
+        const licenses = await fsList('licenses');
+        const cupons = await fsList('cupons');
+        const payments = await fsList('payments');
+        const trialsHwid = await fsList('trials_hwid');
+        const trialsEmail = await fsList('trials_email');
+        return res.json({
+          timestamp: new Date().toISOString(),
+          activations,
+          licenses,
+          cupons,
+          payments,
+          trialsHwid,
+          trialsEmail
+        });
+      } catch (e: any) { 
+        return res.status(500).json({ message: 'Erro ao gerar backup' }); 
       }
-      
-      return res.json(backup);
     }
 
     // ── Download ───────────────────────────────────────────────────────────────
