@@ -558,6 +558,58 @@ if (url === '/api/license/trial' && method === 'POST') {
   }
 }
 
+// ── Admin: Limpar dados de teste ──────────────────────────────────────────────
+if (url === '/api/admin/clear-test-data' && method === 'DELETE') {
+  if (!isAdmin) return res.status(401).json({ message: 'Não autorizado' });
+  
+  try {
+    const collections = ['activations', 'payments', 'users', 'licenses', 'activations_by_payment'];
+    const token = await getToken();
+    const results: any = {};
+    
+    for (const col of collections) {
+      try {
+        const listUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents/${col}`;
+        const response = await axios.get(listUrl, { headers: { Authorization: `Bearer ${token}` } });
+        
+        const documents = response.data.documents || [];
+        let deletedCount = 0;
+        
+        for (const doc of documents) {
+          const docId = doc.name.split('/').pop();
+          const deleteUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIREBASE_DATABASE_ID}/documents/${col}/${docId}`;
+          await axios.delete(deleteUrl, { headers: { Authorization: `Bearer ${token}` } });
+          deletedCount++;
+        }
+        
+        results[col] = { deleted: deletedCount };
+        console.log(`[Admin] Limpou ${deletedCount} documentos da coleção ${col}`);
+        
+      } catch (e: any) {
+        if (e.response?.status === 404) {
+          results[col] = { error: 'Coleção não existe', deleted: 0 };
+        } else {
+          results[col] = { error: e.message, deleted: 0 };
+        }
+      }
+    }
+    
+    return res.json({ 
+      success: true, 
+      message: 'Dados de teste removidos com sucesso',
+      results 
+    });
+    
+  } catch (e: any) {
+    console.error('Erro ao limpar dados:', e);
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+// ── Download ──────────────────────────────────────────────────────────────
+if (url === '/api/download') {
+  return res.redirect(302, 'https://github.com/rovateduino/R3D-PRINT-MANAGER-PRO/releases/download/v2.5.0/Setup_R3D_PrintManager_Pro.exe');
+}
     
     // ── Download ──────────────────────────────────────────────────────────────
     if (url === '/api/download') {
