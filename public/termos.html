@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Termos de Uso - R3D Print Manager Pro</title>
+    <!-- Tailwind CSS CDN para estilização rápida -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Ícones Lucide (CDN) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Personalizações adicionais */
+        body {
+            background-color: #0f0f0f;
+            color: #e5e5e5;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .text-gold {
+            color: #C67D3D;
+        }
+        .border-gold {
+            border-color: #C67D3D;
+        }
+        .bg-gold-gradient {
+            background: linear-gradient(135deg, #C67D3D, #EA580C);
+        }
+        .term-content h1, .term-content h2, .term-content h3 {
+            color: #fff;
+            font-weight: 700;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .term-content h1 {
+            font-size: 1.8rem;
+            border-left: 4px solid #C67D3D;
+            padding-left: 1rem;
+        }
+        .term-content h2 {
+            font-size: 1.4rem;
+            border-left: 3px solid #C67D3D;
+            padding-left: 0.75rem;
+        }
+        .term-content h3 {
+            font-size: 1.2rem;
+            margin-top: 1rem;
+        }
+        .term-content p, .term-content li {
+            line-height: 1.6;
+            color: #cbd5e1;
+            margin-bottom: 0.75rem;
+        }
+        .term-content ul, .term-content ol {
+            margin: 1rem 0 1rem 2rem;
+        }
+        .term-content li {
+            margin-bottom: 0.3rem;
+        }
+        .term-content strong {
+            color: #fff;
+        }
+        .term-content a {
+            color: #C67D3D;
+            text-decoration: underline;
+        }
+        .term-content hr {
+            border-color: #2d2d2d;
+            margin: 1.5rem 0;
+        }
+    </style>
+</head>
+<body class="bg-[#0f0f0f] text-gray-300 antialiased">
+
+    <!-- NAVBAR (igual ao site principal) -->
+    <nav class="fixed w-full z-50 bg-[#0f0f0f]/95 backdrop-blur-md border-b border-white/5 py-3">
+        <div class="max-w-7xl mx-auto px-6 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 overflow-hidden">
+                    <img src="https://r3dprintmanagerpro.com.br/src/assets/logo_r3d.png" alt="R3D Pro" class="w-full h-full object-contain" style="clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);">
+                </div>
+                <span class="text-xl font-bold tracking-tight text-white">R3D <span class="text-[#C67D3D]">Pro</span></span>
+            </div>
+            <div class="hidden md:flex items-center gap-8">
+                <a href="https://r3dprintmanagerpro.com.br/#features" class="text-sm font-medium text-gray-400 hover:text-[#C67D3D] transition-colors">Funcionalidades</a>
+                <a href="https://r3dprintmanagerpro.com.br/#how-it-works" class="text-sm font-medium text-gray-400 hover:text-[#C67D3D] transition-colors">Como Funciona</a>
+                <a href="https://r3dprintmanagerpro.com.br/#pricing" class="text-sm font-medium text-gray-400 hover:text-[#C67D3D] transition-colors">Preço</a>
+                <a href="https://r3dprintmanagerpro.com.br/#faq" class="text-sm font-medium text-gray-400 hover:text-[#C67D3D] transition-colors">FAQ</a>
+                <a href="https://r3dprintmanagerpro.com.br/api/download" class="bg-gradient-to-r from-[#C67D3D] to-[#EA580C] hover:brightness-110 text-white px-6 py-2.5 rounded-full text-sm font-bold transition-all">Download</a>
+            </div>
+            <button class="md:hidden text-white" id="mobile-menu-btn">☰</button>
+        </div>
+    </nav>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="pt-32 pb-20 px-6 max-w-4xl mx-auto">
+        <div class="bg-[#1a1a1a] rounded-3xl border border-white/10 p-8 md:p-12 shadow-2xl">
+            <div class="flex items-center gap-3 mb-8">
+                <a href="https://r3dprintmanagerpro.com.br" class="inline-flex items-center text-sm text-[#C67D3D] hover:underline">
+                    ← Voltar para o site
+                </a>
+            </div>
+            <div class="term-content">
+                <!-- TÍTULO -->
+                <h1 class="text-3xl md:text-4xl font-black text-white mb-2">Termos de Uso e Política de Licenciamento</h1>
+                <p class="text-[#C67D3D] text-sm mb-8">Última atualização: 26 de março de 2026</p>
+
+                <!-- CONTEÚDO COMPLETO DO TERMO (conforme versão unificada) -->
+                <p>Este documento estabelece os termos e condições para o uso do software R3D Print Manager Pro (“Software”), desenvolvido e comercializado por <strong>R3D</strong> (“Licenciante”). Ao adquirir, baixar, instalar, ativar ou utilizar o Software, o usuário (“Licenciado”) declara ter lido, compreendido e aceitado integralmente as disposições abaixo.</p>
+
+                <h2>1. CONCESSÃO DE LICENÇA</h2>
+                <p>O Licenciante concede ao Licenciado uma licença <strong>pessoal, intransferível, não exclusiva e limitada</strong> para utilizar o Software, em regime de uso <strong>perpétuo ou por período determinado</strong>, conforme o plano adquirido (Mensal, Trimestral, Semestral, Anual, Vitalício) ou período de teste gratuito (7 dias). A licença está condicionada ao pagamento integral dos valores correspondentes e à observância das regras de ativação estabelecidas neste Termo.</p>
+
+                <h2>2. ATIVAÇÃO DA LICENÇA</h2>
+                <p>A ativação do Software ocorre mediante a inserção de uma <strong>chave de ativação</strong> (código alfanumérico) gerada exclusivamente pelo Licenciante.</p>
+
+                <h3>2.1. Vinculação ao Hardware (HWID)</h3>
+                <p>No momento da ativação, o Software gera um identificador único baseado em características do computador (“Hardware ID – HWID”). A chave de ativação fica <strong>vinculada permanentemente</strong> ao HWID do computador onde foi ativada pela primeira vez.</p>
+                <ul>
+                    <li>A mesma chave <strong>não poderá ser utilizada em outro computador</strong>, ainda que o Software seja desinstalado.</li>
+                    <li>Qualquer tentativa de transferência da licença para outro equipamento será automaticamente bloqueada.</li>
+                    <li>Após a ativação, o Software funcionará exclusivamente no computador cujo HWID foi registrado.</li>
+                </ul>
+
+                <h3>2.2. Código de Ativação – Uso Único</h3>
+                <p>Cada chave de ativação contém um código único que, após o primeiro uso, é registrado nos sistemas do Licenciante como <strong>“utilizado”</strong>. Não é permitido reutilizar a mesma chave, mesmo após desinstalação ou reinstalação do Software. A tentativa de ativação com uma chave já utilizada resultará em erro e impedirá o funcionamento do Software.</p>
+
+                <h3>2.3. Período de Validade e Renovação</h3>
+                <ul>
+                    <li>Para licenças por tempo determinado (assinaturas), o Software verifica a data de expiração contida na chave. Após o término do período, o Software deixará de funcionar.</li>
+                    <li>Para continuar utilizando, o Licenciado deverá adquirir uma nova licença, recebendo uma nova chave de ativação.</li>
+                    <li>Licenças vitalícias não expiram, mas estão sujeitas às demais condições deste Termo.</li>
+                </ul>
+
+                <h2>3. TESTE GRATUITO (TRIAL)</h2>
+                <p>O Licenciante oferece um período de teste gratuito de <strong>7 (sete) dias corridos</strong>, que pode ser solicitado por meio do site oficial.</p>
+                <ul>
+                    <li>O teste gratuito está limitado a <strong>um uso por Hardware ID (HWID)</strong> e a <strong>um uso por endereço de e-mail</strong>.</li>
+                    <li>A ativação do teste segue o mesmo processo de vinculação ao HWID descrito no item 2.</li>
+                    <li>Após o período de teste, o Software será automaticamente bloqueado. Para continuar utilizando, o Licenciado deverá adquirir um plano pago.</li>
+                </ul>
+
+                <h2>4. VIOLAÇÃO DA INTEGRIDADE E USO INDEVIDO</h2>
+                <p>Constituem <strong>violações graves</strong> deste Termo:</p>
+                <ul>
+                    <li>Tentativa de burlar a ativação ou de desvincular a licença do hardware original.</li>
+                    <li>Reutilização fraudulenta da mesma chave em equipamentos diferentes.</li>
+                    <li>Alteração, remoção ou manipulação dos arquivos de dados do Software, incluindo o banco de dados SQLite, arquivos de cache ou qualquer artefato relacionado à licença.</li>
+                    <li>Modificação da data/hora do sistema com o objetivo de prolongar artificialmente o período de validade da licença.</li>
+                    <li>Engenharia reversa, descompilação, desmontagem ou qualquer forma de análise do código-fonte do Software.</li>
+                    <li>Compartilhamento, distribuição ou revenda da chave de ativação sem autorização expressa do Licenciante.</li>
+                    <li>Utilização do Software em equipamento que não possua licença válida.</li>
+                </ul>
+
+                <h2>5. CONSEQUÊNCIAS DO USO INDEVIDO</h2>
+                <p>A constatação de qualquer das condutas descritas no item 4 implicará, <strong>independentemente de aviso prévio</strong>:</p>
+                <ul>
+                    <li>Cancelamento imediato da licença, tornando o Software inoperante.</li>
+                    <li>Impedimento de reativação com a mesma chave ou com qualquer outra chave vinculada ao mesmo hardware, caso a violação seja caracterizada como tentativa de burla ou fraude.</li>
+                    <li>Perda do direito a reembolso de quaisquer valores pagos, sem prejuízo de outras medidas legais cabíveis.</li>
+                </ul>
+                <p>O Licenciante poderá, a seu critério, registrar as violações e adotar as providências judiciais e extrajudiciais necessárias para resguardar seus direitos.</p>
+
+                <h2>6. PROPRIEDADE INTELECTUAL</h2>
+                <p>O Software, seu código‑fonte, design, logotipos, documentação e todos os elementos que o compõem são de propriedade exclusiva do Licenciante ou de seus licenciadores, sendo protegidos pelas leis de direitos autorais e tratados internacionais. A licença concedida não transfere qualquer direito de propriedade.</p>
+
+                <h2>7. DADOS PESSOAIS E PRIVACIDADE</h2>
+                <p>Para fins de ativação, verificação de licença e envio de comunicações relacionadas ao Software, o Licenciante poderá coletar e armazenar:</p>
+                <ul>
+                    <li>Endereço de e‑mail informado pelo Licenciado;</li>
+                    <li>Nome (quando fornecido);</li>
+                    <li>Hardware ID (HWID) do computador;</li>
+                    <li>Status de ativação e histórico de uso da licença.</li>
+                </ul>
+                <p>Esses dados são tratados em conformidade com a <strong>Lei Geral de Proteção de Dados (LGPD)</strong> e com a <strong>Política de Privacidade</strong> do Licenciante, disponível no site oficial. O Software opera <strong>offline</strong> após ativado; nenhum dado de produção (cálculos de custo, dados de clientes, etc.) é transmitido para servidores externos.</p>
+
+                <h2>8. LIMITAÇÃO DE GARANTIAS E RESPONSABILIDADE</h2>
+                <p>O Software é fornecido <strong>“no estado em que se encontra” (“as is”)</strong>. O Licenciante não garante que o Software atenderá a todas as necessidades do Licenciado, nem que estará isento de erros ou interrupções.</p>
+                <p>Em nenhuma hipótese o Licenciante será responsável por danos indiretos, incidentais, consequenciais ou por lucros cessantes decorrentes do uso ou da impossibilidade de uso do Software, ainda que tenha sido informado da possibilidade de tais danos.</p>
+
+                <h2>9. SUSPENSÃO E TÉRMINO</h2>
+                <p>A licença poderá ser suspensa ou rescindida imediatamente, sem aviso prévio, se:</p>
+                <ul>
+                    <li>O Licenciado violar qualquer disposição deste Termo;</li>
+                    <li>Houver suspeita fundada de fraude ou uso não autorizado;</li>
+                    <li>For solicitado por determinação judicial ou governamental.</li>
+                </ul>
+                <p>Em caso de término, o Licenciado deverá desinstalar o Software e destruir todas as cópias em sua posse.</p>
+
+                <h2>10. DISPOSIÇÕES GERAIS</h2>
+                <p><strong>10.1. Alterações</strong><br>
+                O Licenciante reserva‑se o direito de modificar este Termo a qualquer momento, publicando a versão atualizada no site oficial. O uso continuado do Software após a alteração implica aceitação dos novos termos.</p>
+                <p><strong>10.2. Legislação aplicável e foro</strong><br>
+                Este Termo rege‑se pelas leis da <strong>República Federativa do Brasil</strong>. Fica eleito o foro da <strong>comarca de São Paulo/SP</strong> para dirimir quaisquer controvérsias, renunciando a qualquer outro, por mais privilegiado que seja.</p>
+
+                <h2>11. SUPORTE E CONTATO</h2>
+                <p>Dúvidas sobre ativação, renovação, licenciamento ou eventuais problemas devem ser encaminhadas ao suporte técnico pelos canais:</p>
+                <ul>
+                    <li>E‑mail: <a href="mailto:contato@r3dprintmanagerpro.com.br">contato@r3dprintmanagerpro.com.br</a></li>
+                    <li>WhatsApp: disponível no site oficial <a href="https://r3dprintmanagerpro.com.br" target="_blank">https://r3dprintmanagerpro.com.br</a></li>
+                </ul>
+
+                <hr>
+                <p class="italic text-center">Ao prosseguir com a instalação e ativação do Software, o Licenciado confirma estar ciente e de acordo com todas as condições estabelecidas neste Termo de Uso.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- FOOTER (igual ao site principal) -->
+    <footer class="py-16 border-t border-white/5 bg-[#080808]">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="grid md:grid-cols-4 gap-12 mb-12">
+                <div class="col-span-2">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-10 h-10 overflow-hidden">
+                            <img src="https://r3dprintmanagerpro.com.br/src/assets/logo_r3d.png" alt="Logo" class="w-full h-full object-contain" style="clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);">
+                        </div>
+                        <span class="text-xl font-bold text-white">R3D <span class="text-[#C67D3D]">Pro</span></span>
+                    </div>
+                    <p class="text-gray-500 text-sm max-w-xs leading-relaxed">A solução definitiva para gestão de impressão 3D profissional.</p>
+                </div>
+                <div>
+                    <h4 class="text-white font-bold mb-6 text-sm uppercase tracking-widest">Navegação</h4>
+                    <ul class="space-y-4 text-sm text-gray-500">
+                        <li><a href="https://r3dprintmanagerpro.com.br/#features" class="hover:text-[#C67D3D] transition-colors">Funcionalidades</a></li>
+                        <li><a href="https://r3dprintmanagerpro.com.br/#security" class="hover:text-[#C67D3D] transition-colors">Segurança</a></li>
+                        <li><a href="https://r3dprintmanagerpro.com.br/#pricing" class="hover:text-[#C67D3D] transition-colors">Preços</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-white font-bold mb-6 text-sm uppercase tracking-widest">Legal</h4>
+                    <ul class="space-y-4 text-sm text-gray-500">
+                        <li><a href="termos.html" class="text-[#C67D3D] transition-colors">Termos de Uso</a></li>
+                        <li><a href="#" class="hover:text-[#C67D3D] transition-colors">Privacidade</a></li>
+                        <li><a href="#" class="hover:text-[#C67D3D] transition-colors">Licenciamento</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-xs text-gray-600 uppercase tracking-widest font-medium">
+                <div>© 2026 R3D Print Manager Pro. Todos os direitos reservados.</div>
+                <div class="flex gap-6 items-center">
+                    <span>Desenvolvido no Brasil</span>
+                    <span class="text-[#C67D3D]">v2.5.0 Stable</span>
+                    <a href="https://r3dprintmanagerpro.com.br/admin/cupons" class="hover:text-white transition-colors border-l border-white/10 pl-6 flex items-center gap-2"><span class="text-[#C67D3D]">🔒</span>Painel Admin</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Ativa os ícones Lucide
+        lucide.createIcons();
+        // Mobile menu placeholder (simples)
+        document.getElementById('mobile-menu-btn')?.addEventListener('click', () => {
+            alert('Menu mobile – acesse pelo site principal');
+        });
+    </script>
+</body>
+</html>
