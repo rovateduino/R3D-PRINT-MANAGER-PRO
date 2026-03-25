@@ -134,14 +134,6 @@ function generateLicenseKey(payload: any) {
   return `${iv.toString('hex')}:${encrypted}`;
 }
 
-// Função auxiliar para extrair o último segmento da URL de forma segura
-function getLastSegment(url: string): string | null {
-  const parts = url.split('/');
-  const last = parts[parts.length - 1];
-  if (!last || Array.isArray(last)) return null;
-  return last;
-}
-
 // ============================================================
 // HANDLER PRINCIPAL
 // ============================================================
@@ -230,8 +222,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Admin: Atualizar cupom
     if (url.match(/^\/api\/admin\/cupom\/[^\/]+$/) && method === 'PUT') {
       if (!isAdmin) return res.status(401).json({ message: 'Não autorizado' });
-      const id = getLastSegment(url);
-      if (!id) return res.status(400).json({ error: 'ID inválido' });
+      const lastPart = url.split('/').pop();
+      if (typeof lastPart !== 'string' || lastPart === '') {
+        return res.status(400).json({ error: 'ID inválido' });
+      }
+      const id = lastPart;
       const existing = await firestoreRequest('GET', `cupons/${id}`).catch(() => null);
       if (!existing) return res.status(404).json({ message: 'Cupom não encontrado' });
       await firestoreRequest('PATCH', `cupons/${id}`, { ...existing, ...req.body });
@@ -241,8 +236,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Admin: Excluir cupom
     if (url.match(/^\/api\/admin\/cupom\/[^\/]+$/) && method === 'DELETE') {
       if (!isAdmin) return res.status(401).json({ message: 'Não autorizado' });
-      const id = getLastSegment(url);
-      if (!id) return res.status(400).json({ error: 'ID inválido' });
+      const lastPart = url.split('/').pop();
+      if (typeof lastPart !== 'string' || lastPart === '') {
+        return res.status(400).json({ error: 'ID inválido' });
+      }
+      const id = lastPart;
       await firestoreDelete('cupons', id);
       return res.json({ success: true });
     }
@@ -499,8 +497,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (url.includes('/api/admin/activation/reset/') && method === 'POST') {
       if (!isAdmin) return res.status(401).json({ message: 'Não autorizado' });
-      const code = getLastSegment(url);
-      if (!code) return res.status(400).json({ message: 'Código inválido' });
+      const lastPart = url.split('/').pop();
+      if (typeof lastPart !== 'string' || lastPart === '') {
+        return res.status(400).json({ message: 'Código inválido' });
+      }
+      const code = lastPart;
       const activation = await firestoreRequest('GET', `activations/${code.toUpperCase()}`).catch(() => null);
       if (!activation) return res.status(404).json({ message: 'Ativação não encontrada' });
       await firestoreRequest('PATCH', `activations/${code.toUpperCase()}`, { status: 'AVAILABLE', usedAt: null, hwid: null });
@@ -514,16 +515,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (url.includes('/api/admin/license/delete/') && method === 'DELETE') {
       if (!isAdmin) return res.status(401).json({ message: 'Não autorizado' });
-      const hwid = getLastSegment(url);
-      if (!hwid) return res.status(400).json({ message: 'HWID inválido' });
+      const lastPart = url.split('/').pop();
+      if (typeof lastPart !== 'string' || lastPart === '') {
+        return res.status(400).json({ message: 'HWID inválido' });
+      }
+      const hwid = lastPart;
       await firestoreDelete('licenses', hwid);
       return res.json({ success: true });
     }
     
     if (url.includes('/api/admin/activation/delete/') && method === 'DELETE') {
       if (!isAdmin) return res.status(401).json({ message: 'Não autorizado' });
-      const code = getLastSegment(url);
-      if (!code) return res.status(400).json({ message: 'Código inválido' });
+      const lastPart = url.split('/').pop();
+      if (typeof lastPart !== 'string' || lastPart === '') {
+        return res.status(400).json({ message: 'Código inválido' });
+      }
+      const code = lastPart;
       await firestoreDelete('activations', code.toUpperCase());
       return res.json({ success: true });
     }
