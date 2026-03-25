@@ -892,58 +892,41 @@ const AdminPanel = () => {
             </div>
             <p className="text-gray-500 mt-1 ml-10 text-sm">Gestão centralizada • Firestore Database</p>
           </div>
-<div className="flex gap-3">
-  <button onClick={handleBackup} className="bg-white/5 hover:bg-white/10 text-white px-6 py-3 rounded-2xl font-black flex items-center gap-2 text-sm border border-white/5">
-    <DownloadCloud className="w-5 h-5" />BACKUP JSON
-  </button>
-  {activeTab === 'cupons' && (
-    <button
-      onClick={() => {
-        setEditingCupom(null);
-        setFormData({
-          codigo: '',
-          tipo: 'PERCENTUAL',
-          valor: 0,
-          afiliado_nome: '',
-          afiliado_email: '',
-          afiliado_telefone: '',
-          limite_usos: 0,
-          validade: '',
-          ativo: true
-        });
-        setShowForm(true);
-      }}
-      className="bg-[#C67D3D] hover:bg-[#EA580C] text-white px-6 py-3 rounded-2xl font-black flex items-center gap-2 text-sm"
-    >
-      <Plus className="w-5 h-5" />NOVO CUPOM
-    </button>
-  )}
-  <button
-    onClick={async () => {
-      if (confirm('⚠️ ATENÇÃO: Isso irá apagar TODOS os dados de teste (ativações, pagamentos, licenças, usuários, cupons). Esta ação é irreversível. Deseja continuar?')) {
-        try {
-          const res = await fetch('/api/admin/clear-test-data', {
-            method: 'DELETE',
-            headers: { 'x-admin-password': adminPassword }
-          });
-          const data = await res.json();
-          if (res.ok) {
-            alert(`🧹 Dados removidos:\n${Object.entries(data.results).map(([col, { deleted }]) => `${col}: ${deleted} documentos`).join('\n')}`);
-            fetchData(); // recarrega a aba atual
-          } else {
-            alert('Erro ao limpar dados: ' + (data.message || 'desconhecido'));
-          }
-        } catch (err) {
-          alert('Erro de conexão');
-        }
-      }
-    }}
-    className="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-6 py-3 rounded-2xl font-black flex items-center gap-2 text-sm border border-red-500/20"
-  >
-    <Trash2 className="w-5 h-5" /> LIMPAR TESTES
-  </button>
-</div>
-        
+          <div className="flex gap-3">
+            <button onClick={handleBackup} className="bg-white/5 hover:bg-white/10 text-white px-6 py-3 rounded-2xl font-black flex items-center gap-2 text-sm border border-white/5">
+              <DownloadCloud className="w-5 h-5" />BACKUP JSON
+            </button>
+            {activeTab === 'cupons' && (
+              <button onClick={() => { setEditingCupom(null); setFormData({ codigo: '', tipo: 'PERCENTUAL', valor: 0, afiliado_nome: '', afiliado_email: '', afiliado_telefone: '', limite_usos: 0, validade: '', ativo: true }); setShowForm(true); }} className="bg-[#C67D3D] hover:bg-[#EA580C] text-white px-6 py-3 rounded-2xl font-black flex items-center gap-2 text-sm">
+                <Plus className="w-5 h-5" />NOVO CUPOM
+              </button>
+            )}
+            <button
+              onClick={async () => {
+                if (confirm('⚠️ ATENÇÃO: Isso irá apagar TODOS os dados de teste (ativações, pagamentos, licenças, usuários, cupons). Esta ação é irreversível. Deseja continuar?')) {
+                  try {
+                    const res = await fetch('/api/admin/clear-test-data', {
+                      method: 'DELETE',
+                      headers: { 'x-admin-password': password }
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                      alert(`Sweep results:\n${Object.entries(data.results).map(([col, details]: [string, any]) => `${col}: ${details.deleted} docs`).join('\n')}`);
+                      fetchData();
+                    } else {
+                      alert('Error: ' + (data.message || 'Unknown error'));
+                    }
+                  } catch (err) {
+                    alert('Connection error');
+                  }
+                }
+              }}
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-6 py-3 rounded-2xl font-black flex items-center gap-2 text-sm border border-red-500/20"
+            >
+              <Trash2 className="w-5 h-5" /> LIMPAR TESTES
+            </button>
+          </div>
+        </div>
         <div className="flex gap-2 mb-8 bg-[#1a1a1a] p-1.5 rounded-2xl border border-white/5 w-fit">
           <button onClick={() => setActiveTab('cupons')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeTab === 'cupons' ? 'bg-[#C67D3D] text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}><Tag className="w-4 h-4" />CUPONS</button>
           <button onClick={() => setActiveTab('activations')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeTab === 'activations' ? 'bg-[#C67D3D] text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}><Zap className="w-4 h-4" />ATIVAÇÕES</button>
