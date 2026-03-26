@@ -560,8 +560,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
         return res.json(r.data);
       } catch (e: any) { 
-        console.error(`[PIX] Erro na API Asaas para ${paymentId}:`, e.response?.data || e.message);
-        return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Erro ao buscar QR Code PIX' }); 
+        const asaasError = e.response?.data;
+        const asaasStatus = e.response?.status;
+        
+        console.error(`[PIX] Erro na API Asaas para ${paymentId}:`, asaasError || e.message);
+
+        // Erro específico de cobrança que não pode mais ser paga (expirada)
+        const isExpired = asaasError?.errors?.some((err: any) => 
+          err.code === 'invalid_action' && 
+          (err.description?.includes('não pode mais ser paga') || err.description?.includes('expirada'))
+        );
+
+        if (isExpired || asaasStatus === 400 && asaasError?.errors?.[0]?.code === 'invalid_action') {
+          return res.status(410).json({ 
+            code: 'PAYMENT_EXPIRED',
+            message: 'Esta cobrança expirou e não pode mais ser paga. Por favor, gere um novo pagamento.' 
+          });
+        }
+
+        return res.status(asaasStatus || 500).json(asaasError || { message: 'Erro ao buscar QR Code PIX' }); 
       }
     }
 
