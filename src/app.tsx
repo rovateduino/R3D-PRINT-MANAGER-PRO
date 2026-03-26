@@ -148,6 +148,7 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
   const [realCode, setRealCode] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
   const [pixExpired, setPixExpired] = useState(false);
+  const [fetchingPix, setFetchingPix] = useState(false);
 
   // Polling para verificar pagamento automaticamente
   useEffect(() => {
@@ -325,30 +326,47 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
       try { payment = await payRes.json(); } catch { throw new Error('Erro no servidor ao processar pagamento.'); }
       if (!payRes.ok) throw new Error(payment.errors?.[0]?.description || payment.message || 'Erro no pagamento');
 
+      console.log(`[PIX Debug] Pagamento criado: ${payment.id}, Billing: ${payment.billingType}`);
+
       if (paymentMethod === 'PIX') {
         const pixTx = payment.pixTransaction;
         if (pixTx?.qrCode?.payload) {
+          console.log('[PIX Debug] QR Code recebido na resposta inicial');
           setPixData({ qrCode: pixTx.qrCode.payload, qrCodeImage: pixTx.qrCode.encodedImage || '' });
           setPolling(true);
         } else if (payment.id) {
+          setFetchingPix(true);
           try {
+            console.log(`[PIX Debug] Buscando QR Code para ID: ${payment.id} após delay...`);
+            // Aguarda 1.5s para o Asaas processar a cobrança recém-criada
+            await new Promise(r => setTimeout(r, 1500));
+            
             const pixRes = await fetch(`/api/asaas/pix-qrcode?paymentId=${payment.id}`);
             if (pixRes.status === 410) {
+              console.warn('[PIX Debug] QR Code expirado (410). Regenerando...');
               setPixExpired(true);
               setPolling(false);
+              // Tenta regenerar automaticamente chamando handleSubmit novamente
+              setTimeout(() => handleSubmit(e), 2000);
               return;
             }
             const pixJson = await pixRes.json();
             if (pixJson?.payload) {
+              console.log('[PIX Debug] QR Code obtido com sucesso via rota secundária');
               setPixData({ qrCode: pixJson.payload, qrCodeImage: pixJson.encodedImage || '' });
               setPolling(true);
             } else {
+              console.error('[PIX Debug] Rota pix-qrcode retornou sucesso mas sem payload');
               setSuccess(true);
             }
-          } catch {
+          } catch (pixErr) {
+            console.error('[PIX Debug] Erro ao buscar QR Code:', pixErr);
             setSuccess(true);
+          } finally {
+            setFetchingPix(false);
           }
         } else {
+          console.warn('[PIX Debug] Pagamento criado sem ID e sem pixTransaction');
           setSuccess(true);
         }
       } else if (paymentMethod === 'BOLETO') {
@@ -437,7 +455,8 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
             
             {pixExpired ? (
               <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl mb-6">
-                <p className="text-red-400 text-sm mb-4">O QR Code expirou. Por favor, gere um novo pagamento.</p>
+                <p className="text-red-400 text-sm mb-4 font-bold">O QR Code expirou ou ainda não está pronto.</p>
+                <p className="text-gray-400 text-xs mb-4 italic">Tentando gerar uma nova cobrança automaticamente em instantes...</p>
                 <button 
                   onClick={() => {
                     setPixData(null);
@@ -446,8 +465,13 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
                   }} 
                   className="w-full bg-white/10 hover:bg-white/20 text-white py-3 rounded-xl font-bold text-sm transition-all"
                 >
-                  GERAR NOVO PAGAMENTO
+                  TENTAR MANUALMENTE
                 </button>
+              </div>
+            ) : fetchingPix ? (
+              <div className="py-8 space-y-4">
+                <Loader2 className="w-12 h-12 text-[#C67D3D] animate-spin mx-auto" />
+                <p className="text-gray-400 text-sm animate-pulse italic">Gerando seu QR Code PIX seguro...</p>
               </div>
             ) : (
               <>
