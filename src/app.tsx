@@ -150,12 +150,52 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
   const [pixExpired, setPixExpired] = useState(false);
   const [fetchingPix, setFetchingPix] = useState(false);
   const [checkingManual, setCheckingManual] = useState(false);
+  const [pixTimeRemaining, setPixTimeRemaining] = useState<number | null>(null);
   const isMounted = useRef(true);
 
   useEffect(() => {
     isMounted.current = true;
     return () => { isMounted.current = false; };
   }, []);
+
+  // Timer de expiração do PIX (5 minutos para Sandbox)
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (pixData && !success && !pixExpired) {
+      if (pixTimeRemaining === null) setPixTimeRemaining(300); // 5 minutos (300s)
+      
+      timer = setInterval(() => {
+        setPixTimeRemaining(prev => {
+          if (prev === null) return 300;
+          if (prev <= 1) {
+            console.warn('[PIX Timer] Tempo esgotado. Marcando como expirado para renovação.');
+            setPixExpired(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      setPixTimeRemaining(null);
+    }
+    return () => { if (timer) clearInterval(timer); };
+  }, [pixData, success, pixExpired]);
+
+  // Renovação automática quando expira
+  useEffect(() => {
+    if (pixExpired && !success && pixData) {
+      console.log('[PIX Debug] Renovando QR Code expirado automaticamente...');
+      // Pequeno delay para UX
+      const timeout = setTimeout(() => {
+        if (isMounted.current) {
+          // Dispara o handleSubmit novamente para gerar novo pagamento
+          const form = document.getElementById('checkout-form') as HTMLFormElement;
+          if (form) form.requestSubmit();
+        }
+      }, 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [pixExpired, success]);
 
   // Polling para verificar pagamento automaticamente
   useEffect(() => {
@@ -355,11 +395,17 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
       const { valorParcela } = getParcelamento();
       const extRef = couponData ? `COUPON:${couponData.codigo}:${plan.name}:${Date.now()}` : `REF:${plan.name}:${Date.now()}`;
 
+      // Define a data de vencimento (dueDate) para +7 dias para garantir validade no Sandbox
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 7);
+
       const payloadBase: any = {
         customer: customer.id, billingType: paymentMethod,
-        dueDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+        dueDate: dueDate.toISOString().split('T')[0],
         description: `Assinatura R3D Pro - ${plan.name}${couponData ? ` (Cupom: ${couponData.codigo})` : ''}${installments > 1 ? ` - ${installments}x` : ''}`,
         externalReference: extRef,
+        // Cancelamento automático após o vencimento (importante para PIX no Asaas)
+        daysAfterDueDateToRegistrationCancellation: 7
       };
 
       if (paymentMethod === 'CREDIT_CARD') {
@@ -516,8 +562,19 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
             
             {pixExpired ? (
               <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl mb-6">
-                <p className="text-red-400 text-sm mb-4 font-bold">O QR Code expirou ou ainda não está pronto.</p>
-                <p className="text-gray-400 text-xs mb-4 italic">Tentando gerar uma nova cobrança automaticamente em instantes...</p>
+                <div className="flex items-center gap-2 justify-center text-red-400 mb-2">
+                  <Clock className="w-5 h-5 animate-pulse" />
+                  <p className="text-sm font-bold">QR Code Expirado!</p>
+                </div>
+                <p className="text-gray-400 text-xs mb-4 italic">Gerando um novo pagamento automaticamente para você em segundos...</p>
+                <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden mb-4">
+                  <motion.div 
+                    initial={{ width: "0%" }} 
+                    animate={{ width: "100%" }} 
+                    transition={{ duration: 3, ease: "linear" }}
+                    className="bg-red-500 h-full" 
+                  />
+                </div>
                 <button 
                   onClick={() => {
                     setPixData(null);
@@ -538,8 +595,13 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
               <>
                 <p className="text-gray-400 text-sm mb-4">Escaneie o QR Code ou copie o código abaixo</p>
                 {pixData.qrCodeImage && (
-                  <div className="bg-white p-4 rounded-2xl inline-block mb-4">
+                  <div className="bg-white p-4 rounded-2xl inline-block mb-4 relative">
                     <img src={`data:image/png;base64,${pixData.qrCodeImage}`} alt="QR Code PIX" className="w-48 h-48 mx-auto" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    {pixTimeRemaining !== null && (
+                      <div className={`absolute bottom-2 right-2 px-2 py-1 rounded-md text-[9px] font-bold ${pixTimeRemaining < 60 ? 'bg-red-500 text-white animate-pulse' : 'bg-black/80 text-[#C67D3D]'}`}>
+                        EXPIRA EM {Math.floor(pixTimeRemaining / 60)}:{(pixTimeRemaining % 60).toString().padStart(2, '0')}
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4 text-left">
@@ -565,12 +627,19 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
                     </button>
                   )}
                 </div>
+                {pixTimeRemaining !== null && pixTimeRemaining < 60 && (
+                  <div className="mt-4 p-2 bg-red-500/10 border border-red-500/20 rounded-xl animate-bounce">
+                    <p className="text-[9px] text-red-400 font-bold text-center">
+                      ⚠️ O tempo está acabando! Pague agora ou um novo QR Code será gerado.
+                    </p>
+                  </div>
+                )}
                 <div className="mt-4 p-3 bg-[#C67D3D]/5 border border-[#C67D3D]/10 rounded-xl">
                   <p className="text-[10px] text-[#C67D3D] font-bold uppercase mb-1 flex items-center gap-1 justify-center">
                     <Loader2 className="w-3 h-3 animate-spin" /> Aguardando Pagamento...
                   </p>
                   <p className="text-[9px] text-gray-500 text-center leading-tight">
-                    O QR Code permanecerá na tela até a confirmação automática do banco. Isso leva poucos segundos.
+                    O QR Code permanecerá na tela até a confirmação automática do banco.
                   </p>
                 </div>
               </>
@@ -606,7 +675,7 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
                 <X className="w-4 h-4 shrink-0" /><span>{error}</span>
               </div>
             )}
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form id="checkout-form" onSubmit={handleSubmit} className="space-y-4">
               {step === 1 && (
                 <div className="space-y-4">
                   <div><label className={lc}>Nome Completo</label><div className="relative"><User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" /><input required name="name" value={formData.name} onChange={handleInput} className={ici} placeholder="Seu nome completo" /></div></div>
