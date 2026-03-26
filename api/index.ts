@@ -554,32 +554,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ message: 'paymentId ausente ou inválido' });
       }
 
-      try {
-        const r = await axios.get(`${asaasUrl()}/payments/${paymentId}/pixQrCode`, { 
-          headers: { access_token: process.env.ASAAS_API_KEY || '' } 
-        });
-        return res.json(r.data);
-      } catch (e: any) { 
-        const asaasError = e.response?.data;
-        const asaasStatus = e.response?.status;
-        
-        console.error(`[PIX] Erro na API Asaas para ${paymentId}:`, asaasError || e.message);
-
-        // Erro específico de cobrança que não pode mais ser paga (expirada)
-        const isExpired = asaasError?.errors?.some((err: any) => 
-          err.code === 'invalid_action' && 
-          (err.description?.includes('não pode mais ser paga') || err.description?.includes('expirada'))
-        );
-
-        if (isExpired || asaasStatus === 400 && asaasError?.errors?.[0]?.code === 'invalid_action') {
-          return res.status(410).json({ 
-            code: 'PAYMENT_EXPIRED',
-            message: 'Esta cobrança expirou e não pode mais ser paga. Por favor, gere um novo pagamento.' 
+      // Retry automático (até 3 tentativas com delay de 1s)
+      let lastError: any = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          console.log(`[PIX] Tentativa ${attempt} para ${paymentId}...`);
+          const r = await axios.get(`${asaasUrl()}/payments/${paymentId}/pixQrCode`, { 
+            headers: { access_token: process.env.ASAAS_API_KEY || '' } 
           });
-        }
+          console.log(`[PIX] QR Code obtido com sucesso na tentativa ${attempt}`);
+          return res.json(r.data);
+        } catch (e: any) { 
+          lastError = e;
+          const asaasError = e.response?.data;
+          const asaasStatus = e.response?.status;
+          
+          console.error(`[PIX] Erro na tentativa ${attempt} para ${paymentId}:`, asaasError || e.message);
 
-        return res.status(asaasStatus || 500).json(asaasError || { message: 'Erro ao buscar QR Code PIX' }); 
+          // Erro específico de cobrança que não pode mais ser paga (expirada)
+          const isExpired = asaasError?.errors?.some((err: any) => 
+            err.code === 'invalid_action' && 
+            (err.description?.includes('não pode mais ser paga') || err.description?.includes('expirada'))
+          );
+
+          if (isExpired || (asaasStatus === 400 && asaasError?.errors?.[0]?.code === 'invalid_action')) {
+            console.warn(`[PIX] Cobrança ${paymentId} expirada. Retornando 410.`);
+            return res.status(410).json({ 
+              code: 'PAYMENT_EXPIRED',
+              message: 'Esta cobrança expirou e não pode mais ser paga.' 
+            });
+          }
+
+          // Se for erro de rede ou 500, espera 1s antes do próximo retry
+          if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
+
+      const finalStatus = lastError?.response?.status || 500;
+      const finalData = lastError?.response?.data || { message: 'Erro ao buscar QR Code PIX após múltiplas tentativas' };
+      return res.status(finalStatus).json(finalData);
     }
 
     // ── Status do usuário ───────────────────────────────────────────────────────
