@@ -29,6 +29,20 @@
         "processedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["paymentId", "customerEmail", "status"]
+    },
+    "Activation": {
+      "title": "Activation",
+      "description": "License activation record",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "description": "Activation code" },
+        "email": { "type": "string", "format": "email", "description": "User email" },
+        "plano": { "type": "string", "description": "Plan name" },
+        "paymentId": { "type": "string", "description": "Associated payment ID" },
+        "status": { "type": "string", "description": "Activation status" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Activation date" }
+      },
+      "required": ["code", "email", "paymentId"]
     }
   },
   "firestore": {
@@ -39,6 +53,10 @@
     "/payments/{paymentId}": {
       "schema": "Payment",
       "description": "Log of received payment events"
+    },
+    "/activations/{code}": {
+      "schema": "Activation",
+      "description": "Activations indexed by code"
     }
   }
 }
