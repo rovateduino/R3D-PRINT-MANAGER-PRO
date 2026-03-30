@@ -158,11 +158,11 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
     return () => { isMounted.current = false; };
   }, []);
 
-  // Timer de expiração do PIX (5 minutos para Sandbox)
+  // Timer de expiração do PIX
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
     if (pixData && !success && !pixExpired) {
-      if (pixTimeRemaining === null && isMounted.current) setPixTimeRemaining(300); // 5 minutos (300s)
+      if (pixTimeRemaining === null && isMounted.current) setPixTimeRemaining(300);
       
       timer = setInterval(() => {
         if (!isMounted.current) return;
@@ -182,22 +182,6 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
     return () => { if (timer) clearInterval(timer); };
   }, [pixData, success, pixExpired]);
 
-  // Renovação automática quando expira
-  useEffect(() => {
-    if (pixExpired && !success && pixData) {
-      console.log('[PIX Debug] Renovando QR Code expirado automaticamente...');
-      // Pequeno delay para UX
-      const timeout = setTimeout(() => {
-        if (isMounted.current) {
-          // Dispara o handleSubmit novamente para gerar novo pagamento
-          const form = document.getElementById('checkout-form') as HTMLFormElement;
-          if (form) form.requestSubmit();
-        }
-      }, 3000);
-      return () => clearTimeout(timeout);
-    }
-  }, [pixExpired, success]);
-
   // Polling para verificar pagamento automaticamente
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -214,23 +198,15 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
             console.log(`[PIX Debug] Pagamento confirmado via polling!`);
             setPolling(false);
             
-            if (data.activationCode) {
-              setRealCode(data.activationCode);
+            const checkRes = await fetch(`/api/license/recover?email=${encodeURIComponent(formData.email)}`);
+            const codes = await checkRes.json();
+            if (!isMounted.current) return;
+            if (Array.isArray(codes) && codes.length > 0) {
+              setRealCode(codes[codes.length - 1].code);
               setSuccess(true);
             } else {
-              // Fallback se o código não veio no status
-              const checkRes = await fetch(`/api/license/recover?email=${encodeURIComponent(formData.email)}`);
-              const codes = await checkRes.json();
-              if (!isMounted.current) return;
-              if (Array.isArray(codes) && codes.length > 0) {
-                setRealCode(codes[codes.length - 1].code);
-                setSuccess(true);
-              } else {
-                setSuccess(true); // Sem código, mas confirmado
-              }
+              setSuccess(true);
             }
-          } else {
-            console.log(`[PIX Debug] Pagamento ainda pendente...`);
           }
         } catch (e) {
           console.error(`[PIX Debug] Erro no polling:`, e);
@@ -260,7 +236,6 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
         }
       } else {
         console.log(`[PIX Debug] Pagamento ainda não detectado na verificação manual.`);
-        // Feedback visual rápido se não confirmado
         const btn = document.getElementById('manual-check-btn');
         if (btn) {
           const originalText = btn.innerText;
@@ -272,55 +247,6 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
       console.error(`[PIX Debug] Erro na verificação manual:`, e);
     } finally {
       if (isMounted.current) setCheckingManual(false);
-    }
-  };
-
-  const simulateWebhook = async () => {
-    if (!formData.email) {
-      if (isMounted.current) setError('Preencha o e-mail antes de simular.');
-      return;
-    }
-    if (isMounted.current) setSimulating(true);
-    try {
-      const extRef = couponData ? `COUPON:${couponData.codigo}:${plan.name}:${Date.now()}` : `REF:${plan.name}:${Date.now()}`;
-      const res = await fetch('/api/asaas/webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'asaas-access-token': 'SIMULATED_TOKEN' },
-        body: JSON.stringify({
-          event: 'PAYMENT_CONFIRMED',
-          payment: {
-            id: `pay_sim_${Date.now()}`,
-            customer: 'cus_simulated',
-            value: getDiscountedPrice(),
-            externalReference: extRef,
-            status: 'CONFIRMED',
-            customerEmail: formData.email,
-            customerName: formData.name
-          }
-        })
-      });
-      
-      if (!isMounted.current) return;
-      if (res.ok) {
-        // Aguarda processamento
-        await new Promise(r => setTimeout(r, 2000));
-        if (!isMounted.current) return;
-        const checkRes = await fetch(`/api/license/recover?email=${encodeURIComponent(formData.email)}`);
-        const codes = await checkRes.json();
-        if (!isMounted.current) return;
-        if (Array.isArray(codes) && codes.length > 0) {
-          setRealCode(codes[codes.length - 1].code);
-          setSuccess(true);
-        } else {
-          setSuccess(true);
-        }
-      } else {
-        setError('Erro ao processar simulação no servidor.');
-      }
-    } catch (err) {
-      if (isMounted.current) setError('Erro de conexão ao simular webhook.');
-    } finally {
-      if (isMounted.current) setSimulating(false);
     }
   };
 
@@ -375,6 +301,7 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
     setFormData({ ...formData, [e.target.name]: e.target.value }); 
     if (error && isMounted.current) setError(null); 
   };
+  
   const getBasePrice = () => parseFloat(plan.price.replace('R$ ', '').replace(/\./g, '').replace(',', '.'));
   const getDiscountedPrice = () => {
     const base = getBasePrice();
@@ -415,10 +342,6 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
     }
   };
 
-  const handleSimulatePayment = () => {
-    simulateActivation();
-  };
-
   const handleSubmit = async (e: React.FormEvent | null) => {
     if (e) e.preventDefault(); 
     if (isMounted.current) {
@@ -446,7 +369,6 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
       const { valorParcela } = getParcelamento();
       const extRef = couponData ? `COUPON:${couponData.codigo}:${plan.name}:${Date.now()}` : `REF:${plan.name}:${Date.now()}`;
 
-      // Define a data de vencimento (dueDate) para +7 dias para garantir validade no Sandbox
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 7);
 
@@ -455,7 +377,6 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
         dueDate: dueDate.toISOString().split('T')[0],
         description: `Assinatura R3D Pro - ${plan.name}${couponData ? ` (Cupom: ${couponData.codigo})` : ''}${installments > 1 ? ` - ${installments}x` : ''}`,
         externalReference: extRef,
-        // Cancelamento automático após o vencimento (importante para PIX no Asaas)
         daysAfterDueDateToRegistrationCancellation: 7
       };
 
@@ -490,7 +411,6 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
           if (isMounted.current) setFetchingPix(true);
           try {
             console.log(`[PIX Debug] Buscando QR Code para ID: ${payment.id} após delay...`);
-            // Aguarda 1.5s para o Asaas processar a cobrança recém-criada
             await new Promise(r => setTimeout(r, 1500));
             
             if (!isMounted.current) return;
@@ -500,7 +420,6 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
               if (isMounted.current) {
                 setPixExpired(true);
                 setPolling(false);
-                // Tenta regenerar automaticamente chamando handleSubmit novamente
                 setTimeout(() => { if (isMounted.current) handleSubmit(null); }, 2000);
               }
               return;
@@ -515,7 +434,6 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
               console.error('[PIX Debug] Rota pix-qrcode retornou sucesso mas sem payload');
               if (isMounted.current) {
                 setError('Erro ao gerar QR Code. Tente novamente ou use outra forma de pagamento.');
-                setStep(3);
               }
             }
           } catch (pixErr) {
@@ -523,7 +441,6 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
             if (isMounted.current) {
               setError('Erro ao gerar QR Code PIX. Por favor, tente novamente ou use outro método.');
               setPixData(null);
-              setStep(3);
             }
           } finally {
             if (isMounted.current) setFetchingPix(false);
@@ -532,7 +449,6 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
           console.warn('[PIX Debug] Pagamento criado sem ID e sem pixTransaction');
           if (isMounted.current) {
             setError('Erro ao processar pagamento PIX no Asaas. Tente novamente.');
-            setStep(3);
           }
         }
       } else if (paymentMethod === 'BOLETO') {
@@ -541,10 +457,8 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
             setBoletoUrl(payment.bankSlipUrl);
             setPolling(true);
           }
-        }
-        else if (isMounted.current) {
+        } else if (isMounted.current) {
           setError('Erro ao gerar link do boleto. Tente novamente.');
-          setStep(3);
         }
       } else {
         // Cartão de Crédito
@@ -555,7 +469,9 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
         setError(err.message || 'Erro inesperado durante o checkout.');
       }
       console.error('[Checkout Error]', err);
-    } finally { if (isMounted.current) setLoading(false); }
+    } finally { 
+      if (isMounted.current) setLoading(false); 
+    }
   };
 
   const ic = "w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:border-[#C67D3D] outline-none text-white placeholder-gray-600";
@@ -646,7 +562,7 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
                   onClick={() => {
                     setPixData(null);
                     setPixExpired(false);
-                    setStep(3); // Volta para a revisão/confirmação
+                    setStep(3);
                   }} 
                   className="w-full bg-white/10 hover:bg-white/20 text-white py-3 rounded-xl font-bold text-sm transition-all"
                 >
@@ -689,7 +605,7 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
                     JÁ PAGUEI? VERIFICAR STATUS
                   </button>
                   {import.meta.env.VITE_ASAAS_ENV !== 'production' && (
-                    <button onClick={simulateWebhook} disabled={simulating} className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-3 rounded-xl font-black border border-blue-500/30 transition-all flex items-center justify-center gap-2 text-sm">
+                    <button onClick={() => simulateActivation()} disabled={simulating} className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-3 rounded-xl font-black border border-blue-500/30 transition-all flex items-center justify-center gap-2 text-sm">
                       {simulating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}SIMULAR PAGAMENTO (TESTE)
                     </button>
                   )}
@@ -725,7 +641,7 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
                 <ExternalLink className="w-4 h-4" />ABRIR BOLETO
               </a>
               {import.meta.env.VITE_ASAAS_ENV !== 'production' && (
-                <button onClick={simulateWebhook} disabled={simulating} className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-3 rounded-xl font-black border border-blue-500/30 transition-all flex items-center justify-center gap-2 text-sm">
+                <button onClick={() => simulateActivation()} disabled={simulating} className="w-full bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-3 rounded-xl font-black border border-blue-500/30 transition-all flex items-center justify-center gap-2 text-sm">
                   {simulating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}SIMULAR PAGAMENTO (TESTE)
                 </button>
               )}
@@ -902,7 +818,7 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
                     {import.meta.env.DEV && (
                       <button 
                         type="button" 
-                        onClick={handleSimulatePayment} 
+                        onClick={simulateActivation} 
                         className="flex-1 bg-white/5 hover:bg-white/10 text-gray-400 py-3 rounded-2xl font-bold text-[10px] transition-all"
                       >
                         SIMULAR
