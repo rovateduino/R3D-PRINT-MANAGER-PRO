@@ -151,6 +151,7 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
   const [fetchingPix, setFetchingPix] = useState(false);
   const [checkingManual, setCheckingManual] = useState(false);
   const [pixTimeRemaining, setPixTimeRemaining] = useState<number | null>(null);
+  const [currentPaymentId, setCurrentPaymentId] = useState<string | null>(null);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -185,9 +186,9 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
   // Polling para verificar pagamento automaticamente
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-    // Só inicia polling se tiver um pagamento PIX pendente e o usuário NÃO for PRO ainda
-    if (polling && formData.email && !success && pixData && !userStatus?.isPro) {
-      console.log(`[PIX Debug] Iniciando polling para ${formData.email}`);
+    // Só inicia polling se tiver um pagamento PIX pendente
+    if (polling && formData.email && !success && pixData) {
+      console.log(`[PIX Debug] Iniciando polling para ${formData.email} (Payment: ${currentPaymentId})`);
       interval = setInterval(async () => {
         if (!isMounted.current) return;
         try {
@@ -195,21 +196,12 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
           const data = await res.json();
           if (!isMounted.current) return;
           
-          // Só confirma se o usuário virou PRO (pagamento foi processado)
-          if (data.isPro) {
-            console.log(`[PIX Debug] Pagamento confirmado via polling!`);
+          // Só confirma se o código de ativação corresponde ao pagamento atual
+          if (data.activationCode && data.paymentId === currentPaymentId) {
+            console.log(`[PIX Debug] Pagamento confirmado via polling! Código: ${data.activationCode}`);
             setPolling(false);
-            
-            // Busca o código de ativação
-            const checkRes = await fetch(`/api/license/recover?email=${encodeURIComponent(formData.email)}`);
-            const codes = await checkRes.json();
-            if (!isMounted.current) return;
-            if (Array.isArray(codes) && codes.length > 0) {
-              setRealCode(codes[codes.length - 1].code);
-              setSuccess(true);
-            } else {
-              setSuccess(true);
-            }
+            setRealCode(data.activationCode);
+            setSuccess(true);
           }
         } catch (e) {
           console.error(`[PIX Debug] Erro no polling:`, e);
@@ -217,7 +209,7 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
       }, 5000);
     }
     return () => { if (interval) clearInterval(interval); };
-  }, [polling, formData.email, success, pixData, userStatus?.isPro]);
+  }, [polling, formData.email, success, pixData, currentPaymentId]);
 
   // Resetar userStatus quando email mudar
   useEffect(() => {
@@ -234,16 +226,11 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
       const res = await fetch(`/api/user/status/${formData.email}`);
       const data = await res.json();
       if (!isMounted.current) return;
-      if (data.isPro) {
+      if (data.activationCode && data.paymentId === currentPaymentId) {
         console.log(`[PIX Debug] Pagamento confirmado manualmente!`);
         setPolling(false);
-        const checkRes = await fetch(`/api/license/recover?email=${encodeURIComponent(formData.email)}`);
-        const codes = await checkRes.json();
-        if (!isMounted.current) return;
-        if (Array.isArray(codes) && codes.length > 0) {
-          setRealCode(codes[codes.length - 1].code);
-          setSuccess(true);
-        }
+        setRealCode(data.activationCode);
+        setSuccess(true);
       } else {
         console.log(`[PIX Debug] Pagamento ainda não detectado na verificação manual.`);
         const btn = document.getElementById('manual-check-btn');
@@ -407,6 +394,7 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
       console.log(`[Checkout Debug] Resposta do pagamento:`, payment);
       if (!payRes.ok) throw new Error(payment.errors?.[0]?.description || payment.message || 'Erro no pagamento');
 
+      if (isMounted.current) setCurrentPaymentId(payment.id);
       console.log(`[PIX Debug] Pagamento criado: ${payment.id}, Billing: ${payment.billingType}`);
 
       if (paymentMethod === 'PIX') {
