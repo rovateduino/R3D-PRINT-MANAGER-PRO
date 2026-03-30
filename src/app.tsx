@@ -513,7 +513,10 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
               setPolling(true);
             } else {
               console.error('[PIX Debug] Rota pix-qrcode retornou sucesso mas sem payload');
-              setSuccess(true);
+              if (isMounted.current) {
+                setError('Erro ao gerar QR Code. Tente novamente ou use outra forma de pagamento.');
+                setStep(3);
+              }
             }
           } catch (pixErr) {
             console.error('[PIX Debug] Erro ao buscar QR Code:', pixErr);
