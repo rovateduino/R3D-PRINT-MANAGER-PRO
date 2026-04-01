@@ -1984,36 +1984,7 @@ export default function App() {
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#C67D3D]/5 to-transparent -z-10" />
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16"><h2 className="text-4xl md:text-6xl font-black mb-6">O Investimento que se <span className="text-[#C67D3D]">Paga Sozinho</span></h2><p className="text-gray-400 max-w-2xl mx-auto text-lg">PIX, Boleto ou Cartão em até 12x.</p></div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 items-stretch">
-            {/* Plano Semanal - R$ 5,00 */}
-            <div className="bg-[#1a1a1a] border border-white/5 p-8 rounded-[2.5rem] flex flex-col transition-all hover:border-[#C67D3D]/20">
-              <h3 className="text-lg font-bold mb-2">Plano Semanal</h3>
-              <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-3xl font-black text-white">R$ 5,00</span>
-                <span className="text-gray-500 text-xs">/semana</span>
-              </div>
-              <div className="mb-6" /> {/* espaço vazio para alinhar com os outros */}
-              <ul className="space-y-3 mb-8 flex-grow">
-                <li className="flex items-center gap-3 text-xs text-gray-400">
-                  <CheckCircle2 className="text-[#C67D3D] w-4 h-4 shrink-0" />
-                  Todas as funções Pro
-                </li>
-                <li className="flex items-center gap-3 text-xs text-gray-400">
-                  <CheckCircle2 className="text-[#C67D3D] w-4 h-4 shrink-0" />
-                  Suporte WhatsApp
-                </li>
-                <li className="flex items-center gap-3 text-xs text-gray-400">
-                  <CheckCircle2 className="text-[#C67D3D] w-4 h-4 shrink-0" />
-                  1 Licença HWID
-                </li>
-              </ul>
-              <button
-                onClick={() => openCheckout('Semanal', 'R$ 5,00')}
-                className="w-full bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl font-bold text-sm"
-              >
-                Assinar Agora
-              </button>
-            </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 items-stretch">
             {[
               { name: 'Mensal', price: 'R$ 59,90', sub: '/mês', features: ['Todas as funções', 'Suporte WhatsApp', '1 Licença HWID'] },
               { name: 'Trimestral', price: 'R$ 159,90', sub: '/trim', monthly: 'R$ 53,30 por mês', features: ['Economia de R$ 19,80', 'Todas as funções', 'Suporte WhatsApp'] },
