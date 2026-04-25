@@ -7,10 +7,28 @@ import firebaseConfig from '../firebase-applet-config.json' with { type: 'json' 
 
 // --- INICIALIZAÇÃO CORRIGIDA ---
 if (!getApps().length) {
-  initializeApp({
-    credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}')),
-    projectId: firebaseConfig.projectId
-  });
+  try {
+    const saVar = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (saVar && saVar.startsWith('{')) {
+      const sa = JSON.parse(saVar);
+      initializeApp({
+        credential: cert(sa),
+        projectId: firebaseConfig.projectId
+      });
+      console.log('[Firebase] Initialized with Service Account');
+    } else {
+      initializeApp({
+        projectId: firebaseConfig.projectId
+      });
+      console.warn('[Firebase] Initialized WITHOUT Service Account (Local/Default mode)');
+    }
+  } catch (e: any) {
+    console.error('[Firebase] Initialization error:', e.message);
+    // Fallback to basic initialization
+    initializeApp({
+      projectId: firebaseConfig.projectId
+    });
+  }
 }
 
 // FORÇAR O DATABASE ID DO AI STUDIO EM TODA A API
@@ -417,7 +435,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'admin123';
+    const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'Pr0Th3U5@2026';
     const clientPass = req.headers['x-admin-password'];
     const isAdmin = clientPass === ADMIN_PASS;
 
@@ -1187,6 +1205,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!isAdmin) return res.status(401).json({ message: 'Senha incorreta' });
       const downloads = await fsGet('stats', 'downloads') || { total: 0 };
       return res.json({ downloads });
+    }
+
+    // ── Admin: Zerar estatísticas de downloads ──────────────────────────────────
+    if (url.includes('/api/admin/stats/reset') && method === 'POST') {
+      if (!isAdmin) return res.status(401).json({ message: 'Senha incorreta' });
+      try {
+        await fsSet('stats', 'downloads', {
+          total: 0,
+          ultimoDownload: null,
+          historico: []
+        });
+        return res.json({ success: true, message: 'Contador de downloads zerado' });
+      } catch (e: any) {
+        return res.status(500).json({ message: 'Erro ao zerar contador' });
+      }
     }
 
     console.warn(`[API] 404 Not Found: ${method} ${url}`);
