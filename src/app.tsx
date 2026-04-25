@@ -1049,6 +1049,25 @@ const AdminPanel = () => {
     );
   };
 
+  const handleResetDownloads = () => {
+    showConfirm(
+      'Zerar Downloads',
+      'Tem certeza que deseja zerar o contador de downloads? Esta ação não pode ser desfeita.',
+      async () => {
+        const res = await fetch('/api/admin/stats/reset', {
+          method: 'POST',
+          headers: { 'x-admin-password': password }
+        });
+        if (res.ok) {
+          await fetchDownloadStats();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.message || 'Erro ao zerar contador');
+        }
+      }
+    );
+  };
+
   const fetchDownloadStats = async () => {
     try {
       const res = await fetch('/api/admin/stats', {
@@ -1202,6 +1221,12 @@ const AdminPanel = () => {
                 <div className="flex items-center gap-3 mb-2">
                   <DownloadCloud className="w-8 h-8 text-[#C67D3D]" />
                   <h2 className="text-2xl font-black text-white">Downloads do Aplicativo</h2>
+                  <button 
+                    onClick={handleResetDownloads}
+                    className="ml-4 bg-red-500/10 hover:bg-red-500/20 text-red-500 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-red-500/20 transition-all"
+                  >
+                    Zerar Contador
+                  </button>
                 </div>
                 <p className="text-gray-400 text-sm mb-4">Acompanhe quantas vezes seu aplicativo foi baixado</p>
                 <div className="text-5xl font-black text-[#C67D3D] mb-2">{downloadStats.total}</div>
