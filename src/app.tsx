@@ -188,26 +188,36 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
     let intervalId: NodeJS.Timeout | null = null; 
     
     // Só inicia polling se tiver um pagamento PIX pendente 
-    if (polling && formData.email && !success && pixData) { 
+    if (polling && formData.email && !success && pixData && currentPaymentId) { 
       console.log(`[PIX Debug] Iniciando polling para ${formData.email} (Payment: ${currentPaymentId})`); 
       
       intervalId = setInterval(async () => { 
-        // Verificar se o componente ainda está montado 
-        if (!isMounted.current) { 
-          console.log('[PIX Debug] Componente desmontado, cancelando polling'); 
-          if (intervalId) clearInterval(intervalId); 
-          return; 
-        } 
-        
         try { 
+          // 1. Verificação de segurança: se o componente foi desmontado, não faz nada 
+          if (!isMounted.current) { 
+            console.log('[PIX Debug] Componente desmontado, cancelando polling'); 
+            if (intervalId) clearInterval(intervalId); 
+            return; 
+          } 
+          
+          // 2. Verificação adicional: se o modal já foi fechado (success or !pixData) 
+          if (success || !pixData) { 
+            console.log('[PIX Debug] Modal já foi fechado ou pagamento confirmado, cancelando polling'); 
+            if (intervalId) clearInterval(intervalId); 
+            return; 
+          } 
+          
           const res = await fetch(`/api/user/status/${formData.email}`); 
           if (!res.ok) throw new Error(`HTTP ${res.status}`); 
           const data = await res.json(); 
           
-          // Verificar novamente se o componente ainda está montado 
-          if (!isMounted.current) return; 
+          // 3. Verificar novamente se o componente ainda está montado ANTES de atualizar estado 
+          if (!isMounted.current) { 
+            console.log('[PIX Debug] Componente desmontado durante fetch, ignorando atualização'); 
+            return; 
+          } 
           
-          // Só confirma se o código de ativação corresponde ao pagamento atual 
+          // 4. Confirmação: código de ativação corresponde ao pagamento atual 
           if (data.activationCode && data.paymentId === currentPaymentId) { 
             console.log(`[PIX Debug] Pagamento confirmado via polling! Código: ${data.activationCode}`); 
             if (intervalId) clearInterval(intervalId); 
@@ -219,18 +229,29 @@ const CheckoutModal = ({ onClose, plan }: { onClose: () => void, plan: { name: s
           } 
         } catch (e) { 
           console.error(`[PIX Debug] Erro no polling:`, e); 
-          // Não fazer nada, apenas tentar novamente no próximo intervalo 
+          // Não atualiza estado em caso de erro para não quebrar o modal 
         } 
       }, 5000); 
     } 
     
+    // Cleanup FORÇADO: ao desmontar o componente OU quando as dependências mudarem 
     return () => { 
       if (intervalId) { 
-        console.log('[PIX Debug] Limpando intervalo de polling'); 
+        console.log('[PIX Debug] ⚠️ LIMPANDO INTERVALO DE POLLING'); 
         clearInterval(intervalId); 
+        intervalId = null; 
       } 
     }; 
   }, [polling, formData.email, success, pixData, currentPaymentId]); 
+
+  // GARANTIA: Quando o modal for fechado (onClose), o polling deve ser interrompido imediatamente 
+  useEffect(() => { 
+    return () => { 
+      // Isso garante que qualquer polling em andamento seja interrompido ao desmontar 
+      setPolling(false); 
+      console.log('[PIX Debug] Modal fechado, polling desativado'); 
+    }; 
+  }, []);
 
   // Resetar userStatus quando email mudar
   useEffect(() => {
